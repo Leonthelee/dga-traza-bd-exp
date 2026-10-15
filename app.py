@@ -16,9 +16,100 @@ from src.inspector import parse_expediente, SECUENCIA_SEARCH_SOLICITUDES
 from src.service import error_text, launch, prepare, recover
 from src.store import Store
 
-st.set_page_config(page_title="TrazaBD_EXP QA — DGA Core Tools", layout="wide")
-st.title("TrazaBD_EXP — Trazador & Profiler QA")
-st.caption("DGA Core Tools - by Daniel Díaz L. & AI Engine Antigravity")
+st.set_page_config(page_title="TrazaBD_EXP — DGA Core Tools (Gob.cl)", layout="wide")
+
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    
+    /* Franja Bicolor Oficial Gob.cl */
+    .gob-bicolor {
+        width: 100%;
+        height: 6px;
+        display: flex;
+        margin-bottom: 14px;
+        border-radius: 2px;
+        overflow: hidden;
+    }
+    .gob-blue-bar { width: 50%; background-color: #006fb3; }
+    .gob-red-bar { width: 50%; background-color: #e53f40; }
+    
+    /* Cabecera Institucional MOP / DGA */
+    .header-container {
+        background-color: #ffffff;
+        border-bottom: 2px solid #e2e8f0;
+        padding: 16px 22px;
+        border-radius: 8px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+    }
+    .header-title {
+        color: #0f172a;
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1.25;
+    }
+    .header-subtitle {
+        color: #006fb3;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .badge-mop {
+        background-color: #f1f5f9;
+        color: #1e293b;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid #cbd5e1;
+    }
+    
+    /* Pie de página Oficial Gob.cl */
+    .gob-footer {
+        background-color: #ffffff;
+        border-top: 1px solid #e2e8f0;
+        padding: 14px 20px;
+        margin-top: 40px;
+        border-radius: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        color: #64748b;
+    }
+    .dga-signature {
+        color: #006fb3;
+        font-size: 11px;
+        font-weight: 600;
+    }
+</style>
+
+<!-- Franja Oficial Bicolor Kit Digital Gob.cl -->
+<div class="gob-bicolor">
+    <div class="gob-blue-bar"></div>
+    <div class="gob-red-bar"></div>
+</div>
+
+<!-- Cabecera Oficial MOP / DGA -->
+<div class="header-container">
+    <div>
+        <div class="header-subtitle">Gobierno de Chile • Ministerio de Obras Públicas</div>
+        <div class="header-title">Dirección General de Aguas — Trazador & Profiler Institucional (BD_EXP / BD_PAR / BD_MAP)</div>
+    </div>
+    <div class="badge-mop">
+        🏛️ DGA Core Tools • Kit Digital Gob.cl
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 mode = st.radio("Modo", ["Demo sintética", "SQL Server QA"], key="mode",
                 horizontal=True)
@@ -175,3 +266,20 @@ elif section == "Control QA":
                 st.success("Parada verificada en SQL Server.")
             except Exception as exc:
                 st.error(error_text(exc, settings))
+
+# Pie de Página Oficial Kit Digital Gob.cl & DGA
+st.markdown("""
+<footer class="gob-footer">
+    <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; width: 10px; height: 16px; border-radius: 2px; overflow: hidden;">
+            <div style="width: 50%; background-color: #006fb3;"></div>
+            <div style="width: 50%; background-color: #e53f40;"></div>
+        </div>
+        <span>Gobierno de Chile • Ministerio de Obras Públicas • Dirección General de Aguas</span>
+    </div>
+    <div class="dga-signature">
+        DGA Core Tools — by Daniel Díaz L. & AI Engine Antigravity
+    </div>
+</footer>
+""", unsafe_allow_html=True)
+
