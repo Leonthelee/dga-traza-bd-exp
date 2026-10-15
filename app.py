@@ -25,7 +25,11 @@ from src.oposiciones import (
 from src.service import error_text, launch, prepare, recover
 from src.store import Store
 
-st.set_page_config(page_title="TrazaBD_EXP — DGA Core Tools (Gob.cl)", layout="wide")
+st.set_page_config(
+    page_title="Módulo de Oposiciones — DGA Gob.cl",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
 st.markdown("""
 <style>
@@ -111,17 +115,18 @@ st.markdown("""
 <!-- Cabecera Oficial MOP / DGA -->
 <div class="header-container">
     <div>
-        <div class="header-subtitle">Gobierno de Chile • Ministerio de Obras Públicas</div>
-        <div class="header-title">Dirección General de Aguas — Trazador & Profiler Institucional (BD_EXP / BD_PAR / BD_MAP)</div>
+        <div class="header-subtitle">Gobierno de Chile • Ministerio de Obras Públicas • SNIA</div>
+        <div class="header-title">Dirección General de Aguas — Módulo de Oposiciones</div>
     </div>
     <div class="badge-mop">
-        🏛️ DGA Core Tools • Kit Digital Gob.cl
+        🏛️ Sistema Oficial • Kit Digital Gob.cl
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-mode = st.radio("Modo", ["Demo sintética", "SQL Server QA"], key="mode",
-                horizontal=True)
+# Panel de Telemetría y Configuración (Colapsado por defecto para mantener limpio el front institucional)
+st.sidebar.markdown("### ⚙️ Telemetría & Entorno DGA")
+mode = st.sidebar.radio("Modo de Operación", ["Demo sintética", "SQL Server QA"], key="mode")
 
 events, raws, store, cap_id, settings = [], {}, None, None, None
 if mode == "Demo sintética":
@@ -136,20 +141,29 @@ else:
         store = Store()
         ids = [c["id"] for c in store.list()]
         if ids:
-            cap_id = st.selectbox("Captura", ids, key="qa_cap")
+            cap_id = st.sidebar.selectbox("Captura", ids, key="qa_cap")
             events = store.events(cap_id)
 
-st.metric("Eventos", str(len(events)))
+st.sidebar.metric("Eventos Telemetría", str(len(events)))
 
-section = st.radio("Sección",
-                   ["Módulo Oposiciones (Gob.cl)", "Secuencia y árbol", "Inspector searchSolicitudes",
-                    "Patrones", "Línea base", "Evidencia", "Control QA"],
-                   key="section")
+section = st.sidebar.radio(
+    "Módulo / Vista",
+    [
+        "Módulo Oposiciones (Gob.cl)",
+        "Secuencia y árbol",
+        "Inspector searchSolicitudes",
+        "Patrones",
+        "Línea base",
+        "Evidencia",
+        "Control QA",
+    ],
+    key="section",
+)
 
 if section == "Módulo Oposiciones (Gob.cl)":
-    st.subheader("🏛️ Módulo de Oposiciones DGA — Reemplazo Oficial Kit Digital Gob.cl")
-    st.caption("Reemplazo directo del módulo caído en IBM BPM JSP (`runServiceLayout.jsp`). Filtros en cascada reactivos 100% operativos sobre `BD_PAR` y motor de búsqueda sobre `BD_EXP`.")
-    st.markdown("Reemplaza a: `http://snia.mop.gov.cl/portal/jsp/viewProjectPage.do?...` • Basado en: `http://dga-snia.mop.gov.cl/oposiciones/...`")
+    st.subheader("Búsqueda y Consulta de Oposiciones a Solicitudes de Derechos de Aguas")
+    st.caption("Módulo de consulta institucional. Reemplazo del servicio IBM BPM (Mis proyectos : Módulo de Oposiciones).")
+    st.markdown("Portal Web: [dga-snia.mop.gov.cl/oposiciones/...](http://dga-snia.mop.gov.cl/oposiciones/site/solicitud/searchSolicitudes.xhtml)")
 
     is_qa = (mode == "SQL Server QA" and settings is not None)
 
@@ -191,7 +205,7 @@ if section == "Módulo Oposiciones (Gob.cl)":
         selected_tex = tipo_map[tipo_sel_label]
 
     with c_f2:
-        reg_map = {f"{r['RegCodigo']} - {r['RegNombre']}" if r["RegCodigo"] > 0 else r["RegNombre"]: r["RegCodigo"] for r in regiones_list}
+        reg_map = {f"Región {r['RegCodigo']} - {r['RegNombre']}" if r["RegCodigo"] > 0 else r["RegNombre"]: r["RegCodigo"] for r in regiones_list}
         reg_labels = list(reg_map.keys())
         reg_sel_label = st.selectbox("Región", reg_labels, key="opo_reg_sel")
         selected_reg = reg_map[reg_sel_label]

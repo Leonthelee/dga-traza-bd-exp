@@ -16,24 +16,24 @@ def clean_name(s: Any) -> str:
     return val.replace("\ufffd", "Ñ").replace("\xd1", "Ñ")
 
 
-# Catálogo oficial de las 16 Regiones de Chile (Orden Geográfico Institucional DGA)
+# Catálogo oficial de las 16 Regiones de Chile (Orden Numérico 1 a 16)
 DEMO_REGIONES = [
-    {"RegCodigo": 15, "RegNombre": "Arica y Parinacota", "OrdenGeo": 1},
     {"RegCodigo": 1, "RegNombre": "Tarapacá", "OrdenGeo": 2},
     {"RegCodigo": 2, "RegNombre": "Antofagasta", "OrdenGeo": 3},
     {"RegCodigo": 3, "RegNombre": "Atacama", "OrdenGeo": 4},
     {"RegCodigo": 4, "RegNombre": "Coquimbo", "OrdenGeo": 5},
     {"RegCodigo": 5, "RegNombre": "Valparaíso", "OrdenGeo": 6},
-    {"RegCodigo": 13, "RegNombre": "Metropolitana de Santiago", "OrdenGeo": 7},
     {"RegCodigo": 6, "RegNombre": "del Libertador Gral. B. O'Higgins", "OrdenGeo": 8},
     {"RegCodigo": 7, "RegNombre": "del Maule", "OrdenGeo": 9},
-    {"RegCodigo": 16, "RegNombre": "de Ñuble", "OrdenGeo": 10},
     {"RegCodigo": 8, "RegNombre": "del Biobío", "OrdenGeo": 11},
     {"RegCodigo": 9, "RegNombre": "de La Araucanía", "OrdenGeo": 12},
-    {"RegCodigo": 14, "RegNombre": "de Los Ríos", "OrdenGeo": 13},
     {"RegCodigo": 10, "RegNombre": "de Los Lagos", "OrdenGeo": 14},
     {"RegCodigo": 11, "RegNombre": "de Aysén del Gral. C. Ibáñez del Campo", "OrdenGeo": 15},
     {"RegCodigo": 12, "RegNombre": "de Magallanes y de la Antártica Chilena", "OrdenGeo": 16},
+    {"RegCodigo": 13, "RegNombre": "Metropolitana de Santiago", "OrdenGeo": 7},
+    {"RegCodigo": 14, "RegNombre": "de Los Ríos", "OrdenGeo": 13},
+    {"RegCodigo": 15, "RegNombre": "Arica y Parinacota", "OrdenGeo": 1},
+    {"RegCodigo": 16, "RegNombre": "de Ñuble", "OrdenGeo": 10},
 ]
 
 # Catálogo oficial de las 60 Provincias de Chile por Región (BD_PAR)
@@ -191,14 +191,14 @@ def fetch_tipos_tramite(conn=None) -> List[Dict[str, Any]]:
 
 
 def fetch_regiones(conn=None) -> List[Dict[str, Any]]:
-    """Obtiene las regiones de Chile ordenadas geográficamente desde BD_PAR."""
+    """Obtiene las regiones de Chile ordenadas numéricamente de 1 a 16 desde BD_PAR."""
     if conn is None:
         return DEMO_REGIONES
     try:
         data = rows(
             conn,
             "SELECT RegCodigo, RTRIM(RegNombre) as RegNombre, OrdenGeo "
-            "FROM BD_PAR.dbo.Part_Region ORDER BY OrdenGeo, RegCodigo"
+            "FROM BD_PAR.dbo.Part_Region ORDER BY RegCodigo ASC"
         )
         for r in data:
             r["RegNombre"] = clean_name(r.get("RegNombre"))
