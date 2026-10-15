@@ -7,7 +7,7 @@ advierte y no conecta.
 import pandas as pd
 import streamlit as st
 
-from src.analysis import (BASELINE, LAYERS, baseline, parameters, patterns,
+from src.analysis import (LAYERS, baseline, parameters, patterns,
                           summary, tree, tree_diagram)
 from src.config import ROOT, load_settings
 from src.db import connect
@@ -184,13 +184,14 @@ if section == "Módulo Oposiciones (Gob.cl)":
     def _safe_connect():
         if not is_db_mode or settings is None:
             return None
-        if _conn_check["attempted"] and not _conn_check["ok"]:
-            return None
+        if _conn_check["attempted"]:
+            return connect(settings) if _conn_check["ok"] else None
         try:
-            ctx = connect(settings)
+            with connect(settings):
+                pass
             _conn_check["attempted"] = True
             _conn_check["ok"] = True
-            return ctx
+            return connect(settings)
         except Exception:
             _conn_check["attempted"] = True
             _conn_check["ok"] = False
@@ -285,24 +286,26 @@ if section == "Módulo Oposiciones (Gob.cl)":
         btn_buscar = st.button("🔍 Buscar Oposiciones", key="btn_buscar_oposiciones", type="primary")
 
     if btn_buscar or "opo_cached_results" not in st.session_state:
-        ctx = _safe_connect()
-        results = None
-        if ctx:
-            try:
-                with ctx as c:
-                    results = search_expedientes(
-                        tipo_tramite=selected_tex if selected_tex > 0 else None,
-                        reg_codigo=selected_reg if selected_reg > 0 else None,
-                        pro_codigo=selected_pro if selected_pro > 0 else None,
-                        com_codigo=selected_com if selected_com > 0 else None,
-                        exp_llave=filtro_exp if filtro_exp.strip() else None,
-                        solicitante=filtro_sol if filtro_sol.strip() else None,
-                        limit=50,
-                        conn=c,
-                    )
-            except Exception:
-                results = None
-        if not results or (results and "error" in results[0]):
+        if is_db_mode and settings is not None:
+            ctx = _safe_connect()
+            if ctx:
+                try:
+                    with ctx as c:
+                        results = search_expedientes(
+                            tipo_tramite=selected_tex if selected_tex > 0 else None,
+                            reg_codigo=selected_reg if selected_reg > 0 else None,
+                            pro_codigo=selected_pro if selected_pro > 0 else None,
+                            com_codigo=selected_com if selected_com > 0 else None,
+                            exp_llave=filtro_exp if filtro_exp.strip() else None,
+                            solicitante=filtro_sol if filtro_sol.strip() else None,
+                            limit=50,
+                            conn=c,
+                        )
+                except Exception as exc:
+                    results = [{"error": f"Error al ejecutar búsqueda en base de datos: {exc}"}]
+            else:
+                results = [{"error": f"No se pudo conectar al servidor {settings.server} ({settings.environment})."}]
+        else:
             results = search_expedientes(
                 tipo_tramite=selected_tex if selected_tex > 0 else None,
                 reg_codigo=selected_reg if selected_reg > 0 else None,
@@ -327,7 +330,7 @@ if section == "Módulo Oposiciones (Gob.cl)":
         )
         c_op_a1, c_op_a2 = st.columns(2)
         with c_op_a1:
-            all_exp_codes = [r["ExpConcatLlave"] for r in results] if results and "ExpConcatLlave" in results[0] else ["ND-0802-4437", "ND-0802-4396", "ND-1302-413", "NR-0601-1318"]
+            all_exp_codes = [r["ExpConcatLlave"] for r in results if "ExpConcatLlave" in r] if results and "ExpConcatLlave" in results[0] else ["ND-0802-4437", "ND-0802-4396", "ND-1302-413", "NR-0601-1318"]
             add_exp_choice = st.selectbox("Seleccione Expediente (o elija escribir abajo)", ["(Ingresar manualmente)"] + all_exp_codes, key="add_exp_choice")
             if add_exp_choice == "(Ingresar manualmente)":
                 add_exp_codigo = st.text_input("Código de Expediente", placeholder="Ej: ND-0802-4437", key="add_exp_codigo_manual")
@@ -349,35 +352,46 @@ if section == "Módulo Oposiciones (Gob.cl)":
                 st.error("Debe especificar un Código de Expediente válido.")
             else:
                 fecha_formatted = add_fecha.strftime("%d/%m/%Y")
-                ctx = _safe_connect()
-                conn_to_use = None
-                if ctx:
-                    try:
-                        conn_to_use = ctx.__enter__()
-                    except Exception:
-                        conn_to_use = None
-                
-                resp = agregar_oposicion(
-                    exp_codigo=add_exp_codigo,
-                    fecha_ingreso=fecha_formatted,
-                    doc_nro=add_doc_nro,
-                    opositor_nombre=add_nombre,
-                    opositor_rut=add_rut,
-                    observaciones=add_obs,
-                    conn=conn_to_use,
-                )
-                if ctx and conn_to_use:
-                    try:
-                        ctx.__exit__(None, None, None)
-                    except Exception:
-                        pass
-                
-                if resp.get("success"):
-                    st.success(resp.get("message"))
-                    st.session_state.pop("opo_cached_results", None)
-                    st.rerun()
+                if is_db_mode:
+                    ctx = _safe_connect()
+                    if not ctx:
+                        st.error(f"Error de conexión: No se pudo conectar al servidor {settings.server if settings else 'SQL'} para registrar la oposición.")
+                    else:
+                        try:
+                            with ctx as c:
+                                resp = agregar_oposicion(
+                                    exp_codigo=add_exp_codigo,
+                                    fecha_ingreso=fecha_formatted,
+                                    doc_nro=add_doc_nro,
+                                    opositor_nombre=add_nombre,
+                                    opositor_rut=add_rut,
+                                    observaciones=add_obs,
+                                    conn=c,
+                                )
+                            if resp.get("success"):
+                                st.success(resp.get("message"))
+                                st.session_state.pop("opo_cached_results", None)
+                                st.rerun()
+                            else:
+                                st.error(resp.get("message"))
+                        except Exception as exc:
+                            st.error(f"Error SQL al registrar oposición: {exc}")
                 else:
-                    st.error(resp.get("message"))
+                    resp = agregar_oposicion(
+                        exp_codigo=add_exp_codigo,
+                        fecha_ingreso=fecha_formatted,
+                        doc_nro=add_doc_nro,
+                        opositor_nombre=add_nombre,
+                        opositor_rut=add_rut,
+                        observaciones=add_obs,
+                        conn=None,
+                    )
+                    if resp.get("success"):
+                        st.success(resp.get("message"))
+                        st.session_state.pop("opo_cached_results", None)
+                        st.rerun()
+                    else:
+                        st.error(resp.get("message"))
 
     st.markdown("##### 📋 Resultados de Solicitudes y Expedientes")
 
@@ -477,36 +491,48 @@ if section == "Módulo Oposiciones (Gob.cl)":
                 
             if btn_dlg_exec:
                 fecha_str = dlg_fecha.strftime("%d/%m/%Y")
-                ctx = _safe_connect()
-                conn_to_use = None
-                if ctx:
-                    try:
-                        conn_to_use = ctx.__enter__()
-                    except Exception:
-                        conn_to_use = None
-                
-                resp = agregar_oposicion(
-                    exp_codigo=exp_codigo,
-                    fecha_ingreso=fecha_str,
-                    doc_nro=dlg_doc,
-                    opositor_nombre=dlg_nombre,
-                    opositor_rut=dlg_rut,
-                    observaciones=dlg_obs,
-                    conn=conn_to_use,
-                )
-                if ctx and conn_to_use:
-                    try:
-                        ctx.__exit__(None, None, None)
-                    except Exception:
-                        pass
-                        
-                if resp.get("success"):
-                    st.success(resp.get("message"))
-                    st.session_state["show_agregar_modal"] = False
-                    st.session_state.pop("opo_cached_results", None)
-                    st.rerun()
+                if is_db_mode:
+                    ctx = _safe_connect()
+                    if not ctx:
+                        st.error(f"Error de conexión: No se pudo conectar al servidor {settings.server if settings else 'SQL'} para registrar la oposición.")
+                    else:
+                        try:
+                            with ctx as c:
+                                resp = agregar_oposicion(
+                                    exp_codigo=exp_codigo,
+                                    fecha_ingreso=fecha_str,
+                                    doc_nro=dlg_doc,
+                                    opositor_nombre=dlg_nombre,
+                                    opositor_rut=dlg_rut,
+                                    observaciones=dlg_obs,
+                                    conn=c,
+                                )
+                            if resp.get("success"):
+                                st.success(resp.get("message"))
+                                st.session_state["show_agregar_modal"] = False
+                                st.session_state.pop("opo_cached_results", None)
+                                st.rerun()
+                            else:
+                                st.error(resp.get("message"))
+                        except Exception as exc:
+                            st.error(f"Error SQL al registrar oposición: {exc}")
                 else:
-                    st.error(resp.get("message"))
+                    resp = agregar_oposicion(
+                        exp_codigo=exp_codigo,
+                        fecha_ingreso=fecha_str,
+                        doc_nro=dlg_doc,
+                        opositor_nombre=dlg_nombre,
+                        opositor_rut=dlg_rut,
+                        observaciones=dlg_obs,
+                        conn=None,
+                    )
+                    if resp.get("success"):
+                        st.success(resp.get("message"))
+                        st.session_state["show_agregar_modal"] = False
+                        st.session_state.pop("opo_cached_results", None)
+                        st.rerun()
+                    else:
+                        st.error(resp.get("message"))
 
         if st.session_state.get("show_agregar_modal") and st.session_state.get("opo_target_exp"):
             modal_agregar_oposicion_dialog(st.session_state["opo_target_exp"])

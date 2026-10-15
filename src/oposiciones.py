@@ -24,6 +24,50 @@ def clean_rut(r: Any) -> str:
     return val if val else "S/I"
 
 
+def validate_rut(rut: Any) -> bool:
+    """Valida formato y dígito verificador Módulo 11 para RUT chileno."""
+    if not rut or not isinstance(rut, str):
+        return False
+    clean = rut.strip().replace(".", "").replace(" ", "").upper()
+    if "-" not in clean:
+        if len(clean) < 2:
+            return False
+        cuerpo, dv = clean[:-1], clean[-1]
+    else:
+        parts = clean.split("-")
+        if len(parts) != 2:
+            return False
+        cuerpo, dv = parts[0], parts[1]
+
+    cuerpo = cuerpo.lstrip("0")
+    if not cuerpo.isdigit() or len(cuerpo) < 6 or len(cuerpo) > 9:
+        return False
+
+    multiplicadores = [2, 3, 4, 5, 6, 7]
+    suma = 0
+    for i, digito in enumerate(reversed(cuerpo)):
+        suma += int(digito) * multiplicadores[i % 6]
+    resto = 11 - (suma % 11)
+    if resto == 11:
+        dv_esperado = "0"
+    elif resto == 10:
+        dv_esperado = "K"
+    else:
+        dv_esperado = str(resto)
+    return dv == dv_esperado
+
+
+def normalize_fecha(dt_str: Any) -> str:
+    """Normaliza centinelas SQL (1900-01-01) y valores nulos a 'S/I'."""
+    if not dt_str or not isinstance(dt_str, str):
+        return "S/I"
+    val = dt_str.strip()
+    if not val or val.startswith(("01/01/1900", "1900-01-01", "1900/01/01", "01-01-1900")):
+        return "S/I"
+    return val
+
+
+
 # Catálogo oficial de las 16 Regiones de Chile (Orden Numérico 1 a 16)
 DEMO_REGIONES = [
     {"RegCodigo": 1, "RegNombre": "Tarapacá", "OrdenGeo": 2},
@@ -138,7 +182,7 @@ DEMO_RESULTADOS_BUSQUEDA = [
     {
         "ExpConcatLlave": "ND-0802-4396",
         "NumSolicitudes": 12,
-        "RutSolicitante": "76012345-K",
+        "RutSolicitante": "76012345-5",
         "Solicitante": "SOCIEDAD DE INVERSIONES EMILUX LIMITADA",
         "GLRegion": "del Biobío",
         "GLProvincia": "Bio-Bio",
@@ -157,7 +201,7 @@ DEMO_RESULTADOS_BUSQUEDA = [
     {
         "ExpConcatLlave": "ND-1302-413",
         "NumSolicitudes": 1,
-        "RutSolicitante": "69070100-5",
+        "RutSolicitante": "69070100-6",
         "Solicitante": "ILUSTRE MUNICIPALIDAD DE PUENTE ALTO",
         "GLRegion": "Metropolitana de Santiago",
         "GLProvincia": "Cordillera",
@@ -176,7 +220,7 @@ DEMO_RESULTADOS_BUSQUEDA = [
     {
         "ExpConcatLlave": "NR-0601-1318",
         "NumSolicitudes": 1,
-        "RutSolicitante": "96543210-9",
+        "RutSolicitante": "96543210-8",
         "Solicitante": "AGRICOLA EL ARRAYAN S.A.",
         "GLRegion": "del Libertador Gral. B. O'Higgins",
         "GLProvincia": "Cachapoal",
@@ -195,7 +239,7 @@ DEMO_RESULTADOS_BUSQUEDA = [
     {
         "ExpConcatLlave": "ND-1301-5020",
         "NumSolicitudes": 1,
-        "RutSolicitante": "12345678-9",
+        "RutSolicitante": "12345678-5",
         "Solicitante": "AGROCOMERCIAL LOS ANDES LTDA.",
         "GLRegion": "Metropolitana de Santiago",
         "GLProvincia": "Santiago",
@@ -346,11 +390,22 @@ def search_expedientes(
 ) -> List[Dict[str, Any]]:
     """Busca solicitudes y expedientes en BD_EXP con conteo de oposiciones en vivo."""
     if conn is None:
-        res = list(DEMO_RESULTADOS_BUSQUEDA)
-        if reg_codigo:
-            res = [r for r in res if r["RegCodigo"] == reg_codigo]
-        if exp_llave:
-            res = [r for r in res if exp_llave.upper() in r["ExpConcatLlave"].upper()]
+        res = [dict(r) for r in DEMO_RESULTADOS_BUSQUEDA]
+        if tipo_tramite and tipo_tramite > 0:
+            res = [r for r in res if r.get("TexCodigo") == tipo_tramite]
+        if reg_codigo and reg_codigo > 0:
+            res = [r for r in res if r.get("RegCodigo") == reg_codigo]
+        if pro_codigo and pro_codigo > 0:
+            res = [r for r in res if r.get("ProCodigo") == pro_codigo]
+        if com_codigo and com_codigo > 0:
+            res = [r for r in res if r.get("ComCodigo") == com_codigo]
+        if exp_llave and exp_llave.strip():
+            res = [r for r in res if exp_llave.strip().upper() in r.get("ExpConcatLlave", "").upper()]
+        if solicitante and solicitante.strip():
+            res = [r for r in res if solicitante.strip().upper() in r.get("Solicitante", "").upper()]
+        for r in res:
+            r["FechaSolicitud"] = normalize_fecha(r.get("FechaSolicitud"))
+            r["FechaInicio"] = r["FechaSolicitud"]
         return res
 
     conditions = ["1=1"]
@@ -394,10 +449,12 @@ def search_expedientes(
         COALESCE(RTRIM(s.GLProvincia), '') AS GLProvincia, 
         COALESCE(RTRIM(s.GLComuna), '') AS GLComuna, 
         COALESCE(RTRIM(s.GLTipoDerecho), 'Consuntivo') AS GLTipoDerecho, 
-        CONVERT(VARCHAR(10), MIN(s.FCInicioTramite), 103) AS FechaSolicitud,
-        CONVERT(VARCHAR(10), MIN(s.FCInicioTramite), 103) AS FechaInicio,
+        CASE WHEN MIN(s.FCInicioTramite) <= '1900-01-02' THEN 'S/I' 
+             ELSE CONVERT(VARCHAR(10), MIN(s.FCInicioTramite), 103) END AS FechaSolicitud,
+        CASE WHEN MIN(s.FCInicioTramite) <= '1900-01-02' THEN 'S/I' 
+             ELSE CONVERT(VARCHAR(10), MIN(s.FCInicioTramite), 103) END AS FechaInicio,
         s.TexCodigo, s.RegCodigo, s.ProCodigo, s.ExpCodigo,
-        (SELECT COUNT(*) FROM BD_EXP.dbo.Expt_EtapasSolDocOpoRec o 
+        (SELECT COUNT(DISTINCT o.CorrOpoRec) FROM BD_EXP.dbo.Expt_EtapasSolDocOpoRec o 
          WHERE o.TexCodigo = s.TexCodigo AND o.RegCodigo = s.RegCodigo 
            AND o.ProCodigo = s.ProCodigo AND o.ExpCodigo = s.ExpCodigo) AS NumOposicionesRaw
     FROM BD_EXP.dbo.SolicitudEnTramite s
@@ -415,6 +472,8 @@ def search_expedientes(
             r["NumOposiciones"] = f"{raw_count} - Sí" if raw_count > 0 else "0 - No"
             r["Estado"] = "CON OPOSICIÓN" if raw_count > 0 else "EN TRÁMITE"
             r["RutSolicitante"] = clean_rut(r.get("RutSolicitante"))
+            r["FechaSolicitud"] = normalize_fecha(r.get("FechaSolicitud"))
+            r["FechaInicio"] = r["FechaSolicitud"]
         return records
     except Exception as exc:
         return [{"error": str(exc)}]
@@ -464,15 +523,37 @@ def agregar_oposicion(
 ) -> Dict[str, Any]:
     """Registra una nueva oposición formal para el expediente en BD_EXP (o en sesión de memoria).
     
-    Llama a BD_EXP.dbo.CPA_SaveIngresoOposicion_Portal con parámetros formales:
-      @CodigoExpediente, @EsdFech, @DocNro, @UniCodigo=1.
+    Llama a BD_EXP.dbo.CPA_SaveIngresoOposicion_Portal y vincula la persona opositora
+    mediante BD_EXP.dbo.CPA_SaveRelacionVinculadoPerPortal.
     """
     if not exp_codigo or not exp_codigo.strip():
         return {"success": False, "message": "El código de expediente es obligatorio."}
+    if len(exp_codigo.strip()) > 15:
+        return {"success": False, "message": "El código de expediente excede el largo máximo (15 caracteres)."}
+    if not opositor_nombre or not opositor_nombre.strip():
+        return {"success": False, "message": "Debe especificar el nombre o razón social del opositor."}
+    if doc_nro and len(doc_nro.strip()) > 20:
+        return {"success": False, "message": "El número de documento / SSD excede el largo máximo (20 caracteres)."}
+    if not opositor_rut or not validate_rut(opositor_rut):
+        return {"success": False, "message": f"El RUT del opositor '{opositor_rut}' no es válido (verifique formato y dígito verificador Módulo 11)."}
+
+    # Validar formato de fecha
+    import datetime
+    try:
+        if "/" in fecha_ingreso:
+            d, m, y = map(int, fecha_ingreso.split("/"))
+            datetime.date(y, m, d)
+        elif "-" in fecha_ingreso:
+            y, m, d = map(int, fecha_ingreso.split("-"))
+            datetime.date(y, m, d)
+        else:
+            raise ValueError()
+    except Exception:
+        return {"success": False, "message": f"La fecha de ingreso '{fecha_ingreso}' no tiene un formato válido (DD/MM/YYYY)."}
 
     clean_exp = exp_codigo.strip().upper()
-    clean_rut_opo = clean_rut(opositor_rut) if opositor_rut else "S/I"
-    clean_nombre = opositor_nombre.strip() if opositor_nombre else "OPOSITOR NO ESPECIFICADO"
+    clean_rut_opo = clean_rut(opositor_rut)
+    clean_nombre = opositor_nombre.strip()
     clean_doc = doc_nro.strip() if doc_nro else f"SSD-{fecha_ingreso.replace('/', '')}-01"
 
     if conn is not None:
@@ -490,10 +571,25 @@ def agregar_oposicion(
                 @statusDesc = @statusDesc OUTPUT,
                 @IdInstancia_O = @IdInstancia_O OUTPUT,
                 @NumeroOposicion_O = @NumeroOposicion_O OUTPUT;
+
+            IF @IdInstancia_O IS NOT NULL AND @IdInstancia_O > 0
+            BEGIN
+                DECLARE @st2 INT, @stDesc2 VARCHAR(200);
+                EXEC BD_EXP.dbo.CPA_SaveRelacionVinculadoPerPortal
+                    @IdInstancia = @IdInstancia_O,
+                    @PerRut = ?,
+                    @PerCorrRut = 1,
+                    @PerCorrDir = 1,
+                    @EtaCodigo = 1,
+                    @orden = 1,
+                    @status = @st2 OUTPUT,
+                    @statusDesc = @stDesc2 OUTPUT;
+            END
+
             SELECT @status AS status, @statusDesc AS statusDesc, @IdInstancia_O AS IdInstancia, @NumeroOposicion_O AS NumeroOposicion;
             """
             cur = conn.cursor()
-            cur.execute(sql, (clean_exp, fecha_ingreso, clean_doc))
+            cur.execute(sql, (clean_exp, fecha_ingreso, clean_doc, clean_rut_opo))
             row = cur.fetchone()
             cur.close()
             conn.commit()
@@ -543,7 +639,6 @@ def agregar_oposicion(
     }
     existing_list.append(new_entry)
 
-    # Actualizar DEMO_RESULTADOS_BUSQUEDA si está presente
     for item in DEMO_RESULTADOS_BUSQUEDA:
         if item["ExpConcatLlave"].upper() == clean_exp:
             item["NumOposicionesRaw"] = item.get("NumOposicionesRaw", 0) + 1

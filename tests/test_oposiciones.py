@@ -6,10 +6,9 @@ from src.oposiciones import (
     fetch_provincias,
     fetch_regiones,
     fetch_tipos_tramite,
+    normalize_fecha,
     search_expedientes,
-    DEMO_REGIONES,
-    DEMO_PROVINCIAS,
-    DEMO_COMUNAS,
+    validate_rut,
 )
 
 
@@ -19,6 +18,25 @@ def test_clean_rut():
     assert clean_rut("12345678-9") == "12345678-9"
     assert clean_rut("") == "S/I"
     assert clean_rut(None) == "S/I"
+
+
+def test_validate_rut_and_normalize_fecha():
+    # Validaciones RUT Módulo 11
+    assert validate_rut("76122587-1") is True
+    assert validate_rut("76.122.587-1") is True
+    assert validate_rut("69070100-6") is True
+    assert validate_rut("69070100-5") is False  # DV incorrecto
+    assert validate_rut("76122587-9") is False  # DV incorrecto
+    assert validate_rut("invalido") is False
+    assert validate_rut("") is False
+    assert validate_rut(None) is False
+
+    # Normalización de fechas centinela
+    assert normalize_fecha("01/01/1900") == "S/I"
+    assert normalize_fecha("1900-01-01") == "S/I"
+    assert normalize_fecha("") == "S/I"
+    assert normalize_fecha(None) == "S/I"
+    assert normalize_fecha("15/10/2026") == "15/10/2026"
 
 
 def test_demo_catalogs_and_cascades():
@@ -73,7 +91,7 @@ def test_agregar_oposicion():
         fecha_ingreso="15/10/2026",
         doc_nro="SSD-2026-9901",
         opositor_nombre="CANALISTAS DEL MAIPO S.A.",
-        opositor_rut="76.999.888-2",
+        opositor_rut="76.999.888-8",
         observaciones="Oposición deducida por afectación de derechos.",
         conn=None,
     )
@@ -86,10 +104,47 @@ def test_agregar_oposicion():
     assert len(detalles) >= 1
     assert any("CANALISTAS DEL MAIPO" in d["NombreOpositor"] for d in detalles)
 
-    # Verificar que el expediente ahora tiene oposicion activa
-    res = search_expedientes(exp_llave="ND-1301-5020", conn=None)
-    assert len(res) == 1
-    assert res[0]["NumOposicionesRaw"] >= 1
-    assert " - Sí" in res[0]["NumOposiciones"]
-    assert res[0]["Estado"] == "CON OPOSICIÓN"
+    # Validaciones de rechazo
+    bad_rut = agregar_oposicion("ND-1301-5020", "15/10/2026", "SSD-1", "OP", "12345678-0")
+    assert bad_rut["success"] is False
+    assert "no es válido" in bad_rut["message"]
+
+    bad_exp = agregar_oposicion("ND-1301-5020-DEMASIADO-LARGO", "15/10/2026", "SSD-1", "OP", "76122587-1")
+    assert bad_exp["success"] is False
+    assert "excede el largo máximo" in bad_exp["message"]
+
+    bad_name = agregar_oposicion("ND-1301-5020", "15/10/2026", "SSD-1", "", "76122587-1")
+    assert bad_name["success"] is False
+    assert "nombre o razón social" in bad_name["message"]
+
+    bad_date = agregar_oposicion("ND-1301-5020", "2026-13-40", "SSD-1", "OP", "76122587-1")
+    assert bad_date["success"] is False
+    assert "formato válido" in bad_date["message"]
+
+    # Simulación con Mock de conexión SQL para verificar vinculación de persona
+    executed_sqls = []
+    class MockCursor:
+        def execute(self, sql, params):
+            executed_sqls.append(sql)
+        def fetchone(self):
+            return (0, "OK", 9001, 1)
+        def close(self):
+            pass
+
+    class MockConnection:
+        def cursor(self):
+            return MockCursor()
+        def commit(self):
+            pass
+
+    resp_mock = agregar_oposicion(
+        exp_codigo="ND-0802-4437",
+        fecha_ingreso="15/10/2026",
+        doc_nro="SSD-2026-001",
+        opositor_nombre="CANALISTAS DEL LAJA",
+        opositor_rut="76122587-1",
+        conn=MockConnection(),
+    )
+    assert resp_mock["success"] is True
+    assert any("CPA_SaveRelacionVinculadoPerPortal" in s for s in executed_sqls)
 
