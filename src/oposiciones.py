@@ -8,29 +8,68 @@ Incluye fallback a datos de demostración si se ejecuta en modo demo o sin conex
 from typing import Any, Dict, List, Optional
 from src.db import rows
 
-# Datos estáticos de respaldo para Modo Demo sintético
+def clean_name(s: Any) -> str:
+    """Limpia espacios y caracteres mal codificados provenientes de SQL Server (ej: Ñuble)."""
+    if not s or not isinstance(s, str):
+        return ""
+    val = s.strip()
+    return val.replace("\ufffd", "Ñ").replace("\xd1", "Ñ")
+
+
+# Catálogo oficial de las 16 Regiones de Chile (Orden Geográfico Institucional DGA)
 DEMO_REGIONES = [
+    {"RegCodigo": 15, "RegNombre": "Arica y Parinacota", "OrdenGeo": 1},
+    {"RegCodigo": 1, "RegNombre": "Tarapacá", "OrdenGeo": 2},
+    {"RegCodigo": 2, "RegNombre": "Antofagasta", "OrdenGeo": 3},
+    {"RegCodigo": 3, "RegNombre": "Atacama", "OrdenGeo": 4},
+    {"RegCodigo": 4, "RegNombre": "Coquimbo", "OrdenGeo": 5},
+    {"RegCodigo": 5, "RegNombre": "Valparaíso", "OrdenGeo": 6},
     {"RegCodigo": 13, "RegNombre": "Metropolitana de Santiago", "OrdenGeo": 7},
-    {"RegCodigo": 8, "RegNombre": "del Biobío", "OrdenGeo": 11},
-    {"RegCodigo": 5, "RegNombre": "de Valparaíso", "OrdenGeo": 6},
-    {"RegCodigo": 7, "RegNombre": "del Maule", "OrdenGeo": 9},
     {"RegCodigo": 6, "RegNombre": "del Libertador Gral. B. O'Higgins", "OrdenGeo": 8},
+    {"RegCodigo": 7, "RegNombre": "del Maule", "OrdenGeo": 9},
+    {"RegCodigo": 16, "RegNombre": "de Ñuble", "OrdenGeo": 10},
+    {"RegCodigo": 8, "RegNombre": "del Biobío", "OrdenGeo": 11},
+    {"RegCodigo": 9, "RegNombre": "de La Araucanía", "OrdenGeo": 12},
+    {"RegCodigo": 14, "RegNombre": "de Los Ríos", "OrdenGeo": 13},
+    {"RegCodigo": 10, "RegNombre": "de Los Lagos", "OrdenGeo": 14},
+    {"RegCodigo": 11, "RegNombre": "de Aysén del Gral. C. Ibáñez del Campo", "OrdenGeo": 15},
+    {"RegCodigo": 12, "RegNombre": "de Magallanes y de la Antártica Chilena", "OrdenGeo": 16},
 ]
 
+# Catálogo oficial de las 60 Provincias de Chile por Región (BD_PAR)
 DEMO_PROVINCIAS = {
+    15: [{"ProCodigo": 1, "ProNombre": "Arica"}, {"ProCodigo": 2, "ProNombre": "Parinacota"}],
+    1: [{"ProCodigo": 3, "ProNombre": "Iquique"}, {"ProCodigo": 4, "ProNombre": "Del Tamarugal"}],
+    2: [{"ProCodigo": 3, "ProNombre": "Antofagasta"}, {"ProCodigo": 2, "ProNombre": "El Loa"}, {"ProCodigo": 1, "ProNombre": "Tocopilla"}],
+    3: [{"ProCodigo": 2, "ProNombre": "Copiapó"}, {"ProCodigo": 1, "ProNombre": "Chañaral"}, {"ProCodigo": 3, "ProNombre": "Huasco"}],
+    4: [{"ProCodigo": 1, "ProNombre": "Elqui"}, {"ProCodigo": 3, "ProNombre": "Choapa"}, {"ProCodigo": 2, "ProNombre": "Limarí"}],
+    5: [
+        {"ProCodigo": 5, "ProNombre": "Valparaíso"},
+        {"ProCodigo": 7, "ProNombre": "Isla De Pascua"},
+        {"ProCodigo": 2, "ProNombre": "Los Andes"},
+        {"ProCodigo": 8, "ProNombre": "Marga Marga"},
+        {"ProCodigo": 1, "ProNombre": "Petorca"},
+        {"ProCodigo": 4, "ProNombre": "Quillota"},
+        {"ProCodigo": 6, "ProNombre": "San Antonio"},
+        {"ProCodigo": 3, "ProNombre": "San Felipe"},
+    ],
     13: [
-        {"ProCodigo": 1, "ProNombre": "Santiago"},
+        {"ProCodigo": 6, "ProNombre": "Santiago"},
+        {"ProCodigo": 1, "ProNombre": "Chacabuco"},
         {"ProCodigo": 2, "ProNombre": "Cordillera"},
-        {"ProCodigo": 3, "ProNombre": "Chacabuco"},
-        {"ProCodigo": 4, "ProNombre": "Maipo"},
+        {"ProCodigo": 3, "ProNombre": "Maipo"},
         {"ProCodigo": 5, "ProNombre": "Melipilla"},
-        {"ProCodigo": 6, "ProNombre": "Talagante"},
+        {"ProCodigo": 4, "ProNombre": "Talagante"},
     ],
-    8: [
-        {"ProCodigo": 1, "ProNombre": "Concepción"},
-        {"ProCodigo": 2, "ProNombre": "Bio-Bio"},
-        {"ProCodigo": 3, "ProNombre": "Arauco"},
-    ],
+    6: [{"ProCodigo": 1, "ProNombre": "Cachapoal"}, {"ProCodigo": 3, "ProNombre": "Cardenal Caro"}, {"ProCodigo": 2, "ProNombre": "Colchagua"}],
+    7: [{"ProCodigo": 2, "ProNombre": "Talca"}, {"ProCodigo": 4, "ProNombre": "Cauquenes"}, {"ProCodigo": 1, "ProNombre": "Curicó"}, {"ProCodigo": 3, "ProNombre": "Linares"}],
+    16: [{"ProCodigo": 2, "ProNombre": "Diguillín"}, {"ProCodigo": 1, "ProNombre": "Itata"}, {"ProCodigo": 3, "ProNombre": "Punilla"}],
+    8: [{"ProCodigo": 3, "ProNombre": "Concepción"}, {"ProCodigo": 4, "ProNombre": "Arauco"}, {"ProCodigo": 2, "ProNombre": "Bio-Bío"}],
+    9: [{"ProCodigo": 2, "ProNombre": "Cautín"}, {"ProCodigo": 1, "ProNombre": "Malleco"}],
+    14: [{"ProCodigo": 1, "ProNombre": "Valdivia"}, {"ProCodigo": 2, "ProNombre": "Ranco"}],
+    10: [{"ProCodigo": 3, "ProNombre": "Llanquihue"}, {"ProCodigo": 4, "ProNombre": "Chiloé"}, {"ProCodigo": 2, "ProNombre": "Osorno"}, {"ProCodigo": 5, "ProNombre": "Palena"}],
+    11: [{"ProCodigo": 2, "ProNombre": "Coyhaique"}, {"ProCodigo": 1, "ProNombre": "Aysén"}, {"ProCodigo": 4, "ProNombre": "Capitán Prat"}, {"ProCodigo": 3, "ProNombre": "General Carrera"}],
+    12: [{"ProCodigo": 2, "ProNombre": "Magallanes"}, {"ProCodigo": 4, "ProNombre": "Antártica Chilena"}, {"ProCodigo": 3, "ProNombre": "Tierra Del Fuego"}, {"ProCodigo": 1, "ProNombre": "Última Esperanza"}],
 }
 
 DEMO_COMUNAS = {
@@ -39,11 +78,21 @@ DEMO_COMUNAS = {
         {"ComCodigo": 2, "ComNombre": "Pirque"},
         {"ComCodigo": 3, "ComNombre": "San José de Maipo"},
     ],
+    (13, 6): [
+        {"ComCodigo": 1, "ComNombre": "Santiago Centro"},
+        {"ComCodigo": 2, "ComNombre": "Providencia"},
+        {"ComCodigo": 3, "ComNombre": "Las Condes"},
+    ],
     (8, 2): [
         {"ComCodigo": 1, "ComNombre": "Los Ángeles"},
         {"ComCodigo": 2, "ComNombre": "Antuco"},
         {"ComCodigo": 3, "ComNombre": "Santa Bárbara"},
         {"ComCodigo": 4, "ComNombre": "Tucapel"},
+    ],
+    (5, 5): [
+        {"ComCodigo": 1, "ComNombre": "Valparaíso"},
+        {"ComCodigo": 2, "ComNombre": "Viña del Mar"},
+        {"ComCodigo": 3, "ComNombre": "Concón"},
     ],
 }
 
@@ -146,11 +195,14 @@ def fetch_regiones(conn=None) -> List[Dict[str, Any]]:
     if conn is None:
         return DEMO_REGIONES
     try:
-        return rows(
+        data = rows(
             conn,
             "SELECT RegCodigo, RTRIM(RegNombre) as RegNombre, OrdenGeo "
             "FROM BD_PAR.dbo.Part_Region ORDER BY OrdenGeo, RegCodigo"
         )
+        for r in data:
+            r["RegNombre"] = clean_name(r.get("RegNombre"))
+        return data
     except Exception:
         return DEMO_REGIONES
 
@@ -162,12 +214,15 @@ def fetch_provincias(reg_codigo: int, conn=None) -> List[Dict[str, Any]]:
     if conn is None:
         return DEMO_PROVINCIAS.get(reg_codigo, [{"ProCodigo": 1, "ProNombre": "Provincia Central"}])
     try:
-        return rows(
+        data = rows(
             conn,
             "SELECT ProCodigo, RTRIM(ProNombre) as ProNombre "
             "FROM BD_PAR.dbo.Part_Provincia WHERE RegCodigo = ? ORDER BY ProNombre",
             reg_codigo,
         )
+        for p in data:
+            p["ProNombre"] = clean_name(p.get("ProNombre"))
+        return data
     except Exception:
         return DEMO_PROVINCIAS.get(reg_codigo, [])
 
@@ -179,13 +234,16 @@ def fetch_comunas(reg_codigo: int, pro_codigo: int, conn=None) -> List[Dict[str,
     if conn is None:
         return DEMO_COMUNAS.get((reg_codigo, pro_codigo), [{"ComCodigo": 1, "ComNombre": "Comuna Local"}])
     try:
-        return rows(
+        data = rows(
             conn,
             "SELECT ComCodigo, RTRIM(ComNombre) as ComNombre "
             "FROM BD_PAR.dbo.Part_Comuna WHERE RegCodigo = ? AND ProCodigo = ? ORDER BY ComNombre",
             reg_codigo,
             pro_codigo,
         )
+        for c in data:
+            c["ComNombre"] = clean_name(c.get("ComNombre"))
+        return data
     except Exception:
         return DEMO_COMUNAS.get((reg_codigo, pro_codigo), [])
 

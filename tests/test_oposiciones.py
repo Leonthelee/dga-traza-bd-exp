@@ -19,8 +19,11 @@ def test_demo_catalogs_and_cascades():
 
     # Regiones
     regiones = fetch_regiones(conn=None)
-    assert len(regiones) >= 3
+    assert len(regiones) == 16
     assert any(r["RegCodigo"] == 13 for r in regiones)
+    assert any(r["RegCodigo"] == 16 for r in regiones)  # Ñuble
+    assert any(r["RegCodigo"] == 15 for r in regiones)  # Arica y Parinacota
+    assert any(r["RegCodigo"] == 12 for r in regiones)  # Magallanes
 
     # Provincias (RM = 13)
     provincias_rm = fetch_provincias(13, conn=None)

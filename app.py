@@ -153,29 +153,24 @@ if section == "Módulo Oposiciones (Gob.cl)":
 
     is_qa = (mode == "SQL Server QA" and settings is not None)
 
-    # Catálogos cacheados
-    @st.cache_data(ttl=300)
     def _get_tipos(qa_flag: bool):
         if qa_flag:
             with connect(settings) as c:
                 return fetch_tipos_tramite(c)
         return fetch_tipos_tramite(None)
 
-    @st.cache_data(ttl=300)
     def _get_regiones(qa_flag: bool):
         if qa_flag:
             with connect(settings) as c:
                 return fetch_regiones(c)
         return fetch_regiones(None)
 
-    @st.cache_data(ttl=300)
     def _get_provincias(reg: int, qa_flag: bool):
         if qa_flag:
             with connect(settings) as c:
                 return fetch_provincias(reg, c)
         return fetch_provincias(reg, None)
 
-    @st.cache_data(ttl=300)
     def _get_comunas(reg: int, pro: int, qa_flag: bool):
         if qa_flag:
             with connect(settings) as c:
