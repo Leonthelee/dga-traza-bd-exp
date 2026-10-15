@@ -10,9 +10,18 @@ import streamlit as st
 from src.analysis import (BASELINE, LAYERS, baseline, parameters, patterns,
                           summary, tree, tree_diagram)
 from src.config import ROOT, load_settings
+from src.db import connect
 from src.demo import demo_events
 from src.export import csv_bytes, excel_bytes, markdown_rag_summary
 from src.inspector import parse_expediente, SECUENCIA_SEARCH_SOLICITUDES
+from src.oposiciones import (
+    fetch_comunas,
+    fetch_oposiciones_detalle,
+    fetch_provincias,
+    fetch_regiones,
+    fetch_tipos_tramite,
+    search_expedientes,
+)
 from src.service import error_text, launch, prepare, recover
 from src.store import Store
 
@@ -133,11 +142,192 @@ else:
 st.metric("Eventos", str(len(events)))
 
 section = st.radio("Sección",
-                   ["Secuencia y árbol", "Inspector searchSolicitudes", "Patrones", "Línea base",
-                    "Evidencia", "Control QA"],
+                   ["Módulo Oposiciones (Gob.cl)", "Secuencia y árbol", "Inspector searchSolicitudes",
+                    "Patrones", "Línea base", "Evidencia", "Control QA"],
                    key="section")
 
-if section == "Secuencia y árbol":
+if section == "Módulo Oposiciones (Gob.cl)":
+    st.subheader("🏛️ Módulo de Oposiciones DGA — Reemplazo Oficial Kit Digital Gob.cl")
+    st.caption("Reemplazo directo del módulo caído en IBM BPM JSP (`runServiceLayout.jsp`). Filtros en cascada reactivos 100% operativos sobre `BD_PAR` y motor de búsqueda sobre `BD_EXP`.")
+    st.markdown("Reemplaza a: `http://snia.mop.gov.cl/portal/jsp/viewProjectPage.do?...` • Basado en: `http://dga-snia.mop.gov.cl/oposiciones/...`")
+
+    is_qa = (mode == "SQL Server QA" and settings is not None)
+
+    # Catálogos cacheados
+    @st.cache_data(ttl=300)
+    def _get_tipos(qa_flag: bool):
+        if qa_flag:
+            with connect(settings) as c:
+                return fetch_tipos_tramite(c)
+        return fetch_tipos_tramite(None)
+
+    @st.cache_data(ttl=300)
+    def _get_regiones(qa_flag: bool):
+        if qa_flag:
+            with connect(settings) as c:
+                return fetch_regiones(c)
+        return fetch_regiones(None)
+
+    @st.cache_data(ttl=300)
+    def _get_provincias(reg: int, qa_flag: bool):
+        if qa_flag:
+            with connect(settings) as c:
+                return fetch_provincias(reg, c)
+        return fetch_provincias(reg, None)
+
+    @st.cache_data(ttl=300)
+    def _get_comunas(reg: int, pro: int, qa_flag: bool):
+        if qa_flag:
+            with connect(settings) as c:
+                return fetch_comunas(reg, pro, c)
+        return fetch_comunas(reg, pro, None)
+
+    tipos_list = _get_tipos(is_qa)
+    regiones_list = [{"RegCodigo": 0, "RegNombre": "Todas las Regiones", "OrdenGeo": 0}] + _get_regiones(is_qa)
+
+    # 1. Filtros en Cascada
+    st.markdown("##### 📍 Filtros Institucionales en Cascada (BD_PAR)")
+    c_f1, c_f2, c_f3, c_f4 = st.columns(4)
+
+    with c_f1:
+        tipo_map = {f"{t['Sigla']} - {t['Descripcion']}": t["TexCodigo"] for t in tipos_list}
+        tipo_labels = list(tipo_map.keys())
+        tipo_sel_label = st.selectbox("Tipo de Trámite / Proceso", tipo_labels, key="opo_tipo_sel")
+        selected_tex = tipo_map[tipo_sel_label]
+
+    with c_f2:
+        reg_map = {f"{r['RegCodigo']} - {r['RegNombre']}" if r["RegCodigo"] > 0 else r["RegNombre"]: r["RegCodigo"] for r in regiones_list}
+        reg_labels = list(reg_map.keys())
+        reg_sel_label = st.selectbox("Región", reg_labels, key="opo_reg_sel")
+        selected_reg = reg_map[reg_sel_label]
+
+    with c_f3:
+        if selected_reg > 0:
+            provs = [{"ProCodigo": 0, "ProNombre": "Todas las Provincias"}] + _get_provincias(selected_reg, is_qa)
+        else:
+            provs = [{"ProCodigo": 0, "ProNombre": "Seleccione Región primero"}]
+        pro_map = {p["ProNombre"]: p["ProCodigo"] for p in provs}
+        pro_sel_label = st.selectbox("Provincia", list(pro_map.keys()), key="opo_pro_sel")
+        selected_pro = pro_map[pro_sel_label]
+
+    with c_f4:
+        if selected_reg > 0 and selected_pro > 0:
+            coms = [{"ComCodigo": 0, "ComNombre": "Todas las Comunas"}] + _get_comunas(selected_reg, selected_pro, is_qa)
+        else:
+            coms = [{"ComCodigo": 0, "ComNombre": "Seleccione Provincia primero"}]
+        com_map = {c["ComNombre"]: c["ComCodigo"] for c in coms}
+        com_sel_label = st.selectbox("Comuna", list(com_map.keys()), key="opo_com_sel")
+        selected_com = com_map[com_sel_label]
+
+    # Filtros adicionales
+    c_in1, c_in2, c_btn = st.columns([2, 2, 1])
+    with c_in1:
+        filtro_exp = st.text_input("Código de Expediente", placeholder="Ej: ND-0802-4437, NR-0601-1318", key="opo_exp_in")
+    with c_in2:
+        filtro_sol = st.text_input("Titular / Solicitante", placeholder="Ej: ASESORIAS, ENDESA, MUNICIPALIDAD", key="opo_sol_in")
+    with c_btn:
+        st.write("")
+        st.write("")
+        btn_buscar = st.button("🔍 Buscar Oposiciones", key="btn_buscar_oposiciones", type="primary")
+
+    if btn_buscar or "opo_cached_results" not in st.session_state:
+        if is_qa:
+            with connect(settings) as c:
+                results = search_expedientes(
+                    tipo_tramite=selected_tex if selected_tex > 0 else None,
+                    reg_codigo=selected_reg if selected_reg > 0 else None,
+                    pro_codigo=selected_pro if selected_pro > 0 else None,
+                    com_codigo=selected_com if selected_com > 0 else None,
+                    exp_llave=filtro_exp if filtro_exp.strip() else None,
+                    solicitante=filtro_sol if filtro_sol.strip() else None,
+                    limit=50,
+                    conn=c,
+                )
+        else:
+            results = search_expedientes(
+                tipo_tramite=selected_tex if selected_tex > 0 else None,
+                reg_codigo=selected_reg if selected_reg > 0 else None,
+                pro_codigo=selected_pro if selected_pro > 0 else None,
+                com_codigo=selected_com if selected_com > 0 else None,
+                exp_llave=filtro_exp if filtro_exp.strip() else None,
+                solicitante=filtro_sol if filtro_sol.strip() else None,
+                limit=50,
+                conn=None,
+            )
+        st.session_state["opo_cached_results"] = results
+
+    results = st.session_state.get("opo_cached_results", [])
+
+    st.markdown("---")
+    st.markdown("##### 📋 Resultados de Solicitudes y Expedientes")
+
+    if results and "error" in results[0]:
+        st.error(f"Error al consultar base de datos: {results[0]['error']}")
+    elif not results:
+        st.info("No se encontraron solicitudes con los criterios indicados.")
+    else:
+        con_opo = sum(1 for r in results if r.get("NumOposiciones", 0) > 0)
+        c_m1, c_m2, c_m3 = st.columns(3)
+        c_m1.metric("Expedientes Listados", len(results))
+        c_m2.metric("Con Oposiciones Activas", con_opo)
+        c_m3.metric("En Trámite Regular", len(results) - con_opo)
+
+        df_res = pd.DataFrame(results)
+        cols_show = ["ExpConcatLlave", "NumSolicitudes", "Solicitante", "GLRegion", "GLProvincia", "GLComuna", "GLTipoDerecho", "NumOposiciones", "Estado"]
+        cols_present = [c for c in cols_show if c in df_res.columns]
+        st.dataframe(df_res[cols_present], use_container_width=True)
+
+        st.markdown("##### 🔎 Ficha Técnica y Detalle de Oposiciones del Expediente")
+        exp_options = [r["ExpConcatLlave"] for r in results]
+        selected_exp = st.selectbox("Seleccione expediente para inspeccionar:", exp_options, key="opo_selected_exp")
+
+        if selected_exp:
+            exp_row = next((r for r in results if r["ExpConcatLlave"] == selected_exp), None)
+            if exp_row:
+                c_d1, c_d2, c_d3, c_d4 = st.columns(4)
+                c_d1.metric("Expediente", selected_exp)
+                c_d2.metric("Titular", exp_row.get("Solicitante", "N/A")[:25])
+                c_d3.metric("Comuna", exp_row.get("GLComuna", "N/A"))
+                c_d4.metric("Oposiciones", str(exp_row.get("NumOposiciones", 0)))
+
+            t_op1, t_op2, t_op3 = st.tabs(["📑 Oposiciones Formales (SNIA)", "🗄️ Lugares de Almacenamiento (BD_EXP)", "💾 Exportar Datos"])
+            with t_op1:
+                st.caption(f"Detalle formal de oposiciones para `{selected_exp}` vía `BD_EXP.dbo.CPA_BusquedaOpExpedientes_SNIA`.")
+                if is_qa:
+                    with connect(settings) as c:
+                        detalle_op = fetch_oposiciones_detalle(selected_exp, conn=c)
+                else:
+                    detalle_op = fetch_oposiciones_detalle(selected_exp, conn=None)
+
+                if detalle_op and "error" in detalle_op[0]:
+                    st.error(f"Error al consultar oposiciones: {detalle_op[0]['error']}")
+                elif not detalle_op:
+                    st.info("Este expediente no registra oposiciones formales ingresadas en SNIA.")
+                else:
+                    st.dataframe(pd.DataFrame(detalle_op), use_container_width=True)
+
+            with t_op2:
+                st.caption("Tablas de almacenamiento y mapeo relacional en BD_EXP / BD_PAR:")
+                st.dataframe(pd.DataFrame(SECUENCIA_SEARCH_SOLICITUDES), use_container_width=True)
+
+            with t_op3:
+                c_x1, c_x2 = st.columns(2)
+                with c_x1:
+                    st.download_button(
+                        "Descargar Resultados (CSV)",
+                        csv_bytes(df_res),
+                        f"oposiciones_{selected_exp}.csv",
+                        key="btn_dl_opo_csv"
+                    )
+                with c_x2:
+                    st.download_button(
+                        "Descargar Resultados (Excel)",
+                        excel_bytes({"Resultados": df_res}),
+                        f"oposiciones_{selected_exp}.xlsx",
+                        key="btn_dl_opo_xlsx"
+                    )
+
+elif section == "Secuencia y árbol":
     for layer in LAYERS:
         with st.expander(layer):
             st.dataframe(summary(events, layer))

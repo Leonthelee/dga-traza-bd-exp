@@ -7,19 +7,24 @@ Herramienta satélite y autónoma de diagnóstico forense para capturar trazas d
 
 ---
 
-## 🎯 Objetivo Principal: Trazabilidad de `searchSolicitudes.xhtml`
+## 🎯 Objetivo Principal: Trazabilidad y Reemplazo del Módulo de Oposiciones
 
-El objetivo central es auditar y mapear los **lugares de almacenamiento (tablas de `BD_EXP` y `BD_PAR`)** y la cadena de Stored Procedures que se ejecutan cuando un usuario consulta un expediente en el portal de Oposiciones:
-👉 **URL:** [http://dga-snia.mop.gov.cl/oposiciones/site/solicitud/searchSolicitudes.xhtml](http://dga-snia.mop.gov.cl/oposiciones/site/solicitud/searchSolicitudes.xhtml)
+### 1. Reemplazo del Módulo Caído en IBM BPM JSP:
+- **Módulo heredado con fallas:** `http://snia.mop.gov.cl/portal/jsp/viewProjectPage.do?pageUrl=/jsp/runServiceLayout.jsp?processRef=/1.1143eb90-26d5-4d4c-bd4c-d9c0dcec9fbf&favId=30542` (*Mis proyectos : Módulo de Oposiciones*).
+- **Diagnóstico del problema:** En el portlet BPM, solo cargaban Tipo de Proceso y Región; las listas dependientes (Provincia y Comuna) quedaban huérfanas por endpoints SOAP/DWR (`Admbpmpc`) caídos o sin sesión, impidiendo que la consulta trajera resultados a pantalla.
+- **Solución moderna Gob.cl:** La pestaña `Módulo Oposiciones (Gob.cl)` reemplaza directamente este portlet conectando de forma directa y reactiva con `BD_PAR` (catálogos de provincias y comunas) y `BD_EXP` (búsqueda y detalle de oposiciones).
 
-### Cadena de Entrega de Información:
-1. **Botón «Buscar»:** Dispara `[BD_EXP].[dbo].[CPA_BusquedaExpedientesOp]` consultando:
+### 2. Cadena de Consulta y Entrega (Referencia `searchSolicitudes.xhtml`):
+👉 **URL de referencia funcional:** [http://dga-snia.mop.gov.cl/oposiciones/site/solicitud/searchSolicitudes.xhtml](http://dga-snia.mop.gov.cl/oposiciones/site/solicitud/searchSolicitudes.xhtml)
+
+1. **Botón «Buscar Oposiciones»:** Dispara consulta sobre `BD_EXP..SolicitudEnTramite` y `BD_EXP..CPA_BusquedaOpExpedientes_SNIA` consultando:
    - `BD_EXP..Expt_ObjetoNegocioND` (o `Trasl`, `NR`, `Obr`, `Fisc`)
    - `BD_EXP..Expt_Solicitud`
    - `BD_EXP..Expt_SituacionActualSolic`
    - `BD_PAR..Part_SituacionActual`
    - `BD_EXP..Expt_Personas`
-2. **Población de Ficha:** Ejecuta 10 Stored Procedures secuenciales (`Exps_PerBuscaExpPorCodExpF10`, `Exps_SolExpSel4F6`, `Exps_TieneResApruebaF3`, `Exps_TraerRegPro`, etc.) recuperando resoluciones, titulares, fechas legales y etapas.
+   - `BD_EXP..Expt_EtapasSolDocOpoRec` (Opositores registrados)
+2. **Población de Ficha:** Ejecuta la secuencia canónica de 10 Stored Procedures (`Exps_PerBuscaExpPorCodExpF10`, `Exps_SolExpSel4F6`, `Exps_TieneResApruebaF3`, `Exps_TraerRegPro`, etc.) recuperando resoluciones, titulares, fechas legales y etapas.
 
 ---
 
