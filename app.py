@@ -15,6 +15,8 @@ from src.demo import demo_events
 from src.export import csv_bytes, excel_bytes, markdown_rag_summary
 from src.inspector import parse_expediente, SECUENCIA_SEARCH_SOLICITUDES
 from src.oposiciones import (
+    agregar_oposicion,
+    clean_rut,
     fetch_comunas,
     fetch_oposiciones_detalle,
     fetch_provincias,
@@ -128,7 +130,7 @@ st.markdown("""
 st.sidebar.markdown("### ⚙️ Telemetría & Entorno DGA")
 mode = st.sidebar.radio(
     "Ambiente / Modo",
-    ["Producción (172.16.71.41)", "SQL Server QA", "Demo sintética"],
+    ["Demo sintética", "Producción (172.16.71.41)", "SQL Server QA"],
     key="mode",
 )
 
@@ -177,13 +179,22 @@ if section == "Módulo Oposiciones (Gob.cl)":
     elif is_db_mode and settings_error:
         st.warning(f"⚠️ **Atención:** {settings_error}. Operando en modo demostración.")
 
+    _conn_check = {"attempted": False, "ok": False}
+
     def _safe_connect():
-        if is_db_mode and settings is not None:
-            try:
-                return connect(settings)
-            except Exception:
-                return None
-        return None
+        if not is_db_mode or settings is None:
+            return None
+        if _conn_check["attempted"] and not _conn_check["ok"]:
+            return None
+        try:
+            ctx = connect(settings)
+            _conn_check["attempted"] = True
+            _conn_check["ok"] = True
+            return ctx
+        except Exception:
+            _conn_check["attempted"] = True
+            _conn_check["ok"] = False
+            return None
 
     def _get_tipos():
         ctx = _safe_connect()
@@ -307,6 +318,67 @@ if section == "Módulo Oposiciones (Gob.cl)":
     results = st.session_state.get("opo_cached_results", [])
 
     st.markdown("---")
+    
+    # Formulario Oficial de Ingreso de Oposiciones (CPA_SaveIngresoOposicion_Portal)
+    with st.expander("➕ Formulario Oficial: Agregar Oposición a Expediente (CPA_SaveIngresoOposicion_Portal)", expanded=False):
+        st.markdown(
+            "**Procedimiento Oficial de Oposición DGA:** Registra formalmente la deducción de una oposición en "
+            "`BD_EXP.dbo.CPA_SaveIngresoOposicion_Portal` vinculada al expediente correspondiente."
+        )
+        c_op_a1, c_op_a2 = st.columns(2)
+        with c_op_a1:
+            all_exp_codes = [r["ExpConcatLlave"] for r in results] if results and "ExpConcatLlave" in results[0] else ["ND-0802-4437", "ND-0802-4396", "ND-1302-413", "NR-0601-1318"]
+            add_exp_choice = st.selectbox("Seleccione Expediente (o elija escribir abajo)", ["(Ingresar manualmente)"] + all_exp_codes, key="add_exp_choice")
+            if add_exp_choice == "(Ingresar manualmente)":
+                add_exp_codigo = st.text_input("Código de Expediente", placeholder="Ej: ND-0802-4437", key="add_exp_codigo_manual")
+            else:
+                add_exp_codigo = add_exp_choice
+            
+            import datetime
+            add_fecha = st.date_input("Fecha de Ingreso de Oposición", value=datetime.date.today(), key="add_opo_fecha")
+            add_doc_nro = st.text_input("N° Documento / N° SSD / Carta", placeholder="Ej: SSD-2026-00412 o CARTA-01", key="add_opo_doc")
+
+        with c_op_a2:
+            add_rut = st.text_input("RUT del Opositor", placeholder="Ej: 12345678-9", key="add_opo_rut")
+            add_nombre = st.text_input("Nombre / Razón Social Opositor", placeholder="Ej: COMUNIDAD DE AGUAS CANAL EL CARMEN", key="add_opo_nombre")
+            add_obs = st.text_area("Observaciones / Fundamento Legal", placeholder="Deduce oposición por eventual afectación de caudales y derechos constituidos...", key="add_opo_obs", height=100)
+
+        btn_guardar_opo = st.button("💾 Ejecutar: Registrar Oposición en BD_EXP", type="primary", key="btn_guardar_opo")
+        if btn_guardar_opo:
+            if not add_exp_codigo or not add_exp_codigo.strip():
+                st.error("Debe especificar un Código de Expediente válido.")
+            else:
+                fecha_formatted = add_fecha.strftime("%d/%m/%Y")
+                ctx = _safe_connect()
+                conn_to_use = None
+                if ctx:
+                    try:
+                        conn_to_use = ctx.__enter__()
+                    except Exception:
+                        conn_to_use = None
+                
+                resp = agregar_oposicion(
+                    exp_codigo=add_exp_codigo,
+                    fecha_ingreso=fecha_formatted,
+                    doc_nro=add_doc_nro,
+                    opositor_nombre=add_nombre,
+                    opositor_rut=add_rut,
+                    observaciones=add_obs,
+                    conn=conn_to_use,
+                )
+                if ctx and conn_to_use:
+                    try:
+                        ctx.__exit__(None, None, None)
+                    except Exception:
+                        pass
+                
+                if resp.get("success"):
+                    st.success(resp.get("message"))
+                    st.session_state.pop("opo_cached_results", None)
+                    st.rerun()
+                else:
+                    st.error(resp.get("message"))
+
     st.markdown("##### 📋 Resultados de Solicitudes y Expedientes")
 
     if results and "error" in results[0]:
@@ -314,16 +386,45 @@ if section == "Módulo Oposiciones (Gob.cl)":
     elif not results:
         st.info("No se encontraron solicitudes con los criterios indicados.")
     else:
-        con_opo = sum(1 for r in results if r.get("NumOposiciones", 0) > 0)
+        con_opo = sum(1 for r in results if (r.get("NumOposicionesRaw", 0) > 0) or (" - Sí" in str(r.get("NumOposiciones", ""))))
         c_m1, c_m2, c_m3 = st.columns(3)
         c_m1.metric("Expedientes Listados", len(results))
         c_m2.metric("Con Oposiciones Activas", con_opo)
         c_m3.metric("En Trámite Regular", len(results) - con_opo)
 
         df_res = pd.DataFrame(results)
-        cols_show = ["ExpConcatLlave", "NumSolicitudes", "Solicitante", "GLRegion", "GLProvincia", "GLComuna", "GLTipoDerecho", "NumOposiciones", "Estado"]
+        if "RutSolicitante" not in df_res.columns:
+            df_res["RutSolicitante"] = [clean_rut(r.get("RutPasSolicitante", "")) for r in results]
+        if "FechaSolicitud" not in df_res.columns:
+            df_res["FechaSolicitud"] = df_res.get("FechaInicio", "S/I")
+
+        cols_show = [
+            "ExpConcatLlave",
+            "RutSolicitante",
+            "FechaSolicitud",
+            "NumOposiciones",
+            "Solicitante",
+            "GLRegion",
+            "GLProvincia",
+            "GLComuna",
+            "GLTipoDerecho",
+            "Estado",
+        ]
         cols_present = [c for c in cols_show if c in df_res.columns]
-        st.dataframe(df_res[cols_present], width="stretch")
+        rename_map = {
+            "ExpConcatLlave": "Código Expediente",
+            "RutSolicitante": "RUT Solicitante",
+            "FechaSolicitud": "Fecha Solicitud",
+            "NumOposiciones": "N° Oposiciones",
+            "Solicitante": "Titular / Solicitante",
+            "GLRegion": "Región",
+            "GLProvincia": "Provincia",
+            "GLComuna": "Comuna",
+            "GLTipoDerecho": "Tipo Derecho",
+            "Estado": "Estado",
+        }
+        df_display = df_res[cols_present].rename(columns=rename_map)
+        st.dataframe(df_display, width="stretch")
 
         st.markdown("##### 🔎 Ficha Técnica y Detalle de Oposiciones del Expediente")
         exp_options = [r["ExpConcatLlave"] for r in results]
@@ -334,9 +435,9 @@ if section == "Módulo Oposiciones (Gob.cl)":
             if exp_row:
                 c_d1, c_d2, c_d3, c_d4 = st.columns(4)
                 c_d1.metric("Expediente", selected_exp)
-                c_d2.metric("Titular", exp_row.get("Solicitante", "N/A")[:25])
-                c_d3.metric("Comuna", exp_row.get("GLComuna", "N/A"))
-                c_d4.metric("Oposiciones", str(exp_row.get("NumOposiciones", 0)))
+                c_d2.metric("RUT Solicitante", exp_row.get("RutSolicitante", "S/I"))
+                c_d3.metric("Fecha Solicitud", exp_row.get("FechaSolicitud", exp_row.get("FechaInicio", "S/I")))
+                c_d4.metric("N° Oposiciones", str(exp_row.get("NumOposiciones", "0 - No")))
 
             t_op1, t_op2, t_op3 = st.tabs(["📑 Oposiciones Formales (SNIA)", "🗄️ Lugares de Almacenamiento (BD_EXP)", "💾 Exportar Datos"])
             with t_op1:

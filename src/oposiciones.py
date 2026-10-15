@@ -16,6 +16,14 @@ def clean_name(s: Any) -> str:
     return val.replace("\ufffd", "Ñ").replace("\xd1", "Ñ")
 
 
+def clean_rut(r: Any) -> str:
+    """Limpia ceros a la izquierda y formatea RUT/Pasaporte para visualización institucional."""
+    if not r or not isinstance(r, str):
+        return "S/I"
+    val = r.strip().lstrip("0")
+    return val if val else "S/I"
+
+
 # Catálogo oficial de las 16 Regiones de Chile (Orden Numérico 1 a 16)
 DEMO_REGIONES = [
     {"RegCodigo": 1, "RegNombre": "Tarapacá", "OrdenGeo": 2},
@@ -111,66 +119,97 @@ DEMO_RESULTADOS_BUSQUEDA = [
     {
         "ExpConcatLlave": "ND-0802-4437",
         "NumSolicitudes": 12,
+        "RutSolicitante": "76122587-1",
         "Solicitante": "ASESORIAS E INVERSIONES D&P DOS LIMITADA.",
         "GLRegion": "del Biobío",
         "GLProvincia": "Bio-Bio",
         "GLComuna": "Tucapel",
         "GLTipoDerecho": "No Consuntivo",
+        "FechaSolicitud": "30/05/2012",
         "FechaInicio": "30/05/2012",
         "TexCodigo": 1,
         "RegCodigo": 8,
         "ProCodigo": 2,
         "ExpCodigo": 4437,
-        "NumOposiciones": 98,
+        "NumOposicionesRaw": 98,
+        "NumOposiciones": "98 - Sí",
         "Estado": "CON OPOSICIÓN",
     },
     {
         "ExpConcatLlave": "ND-0802-4396",
         "NumSolicitudes": 12,
+        "RutSolicitante": "76012345-K",
         "Solicitante": "SOCIEDAD DE INVERSIONES EMILUX LIMITADA",
         "GLRegion": "del Biobío",
         "GLProvincia": "Bio-Bio",
         "GLComuna": "Santa Bárbara",
         "GLTipoDerecho": "No Consuntivo",
+        "FechaSolicitud": "14/03/2011",
         "FechaInicio": "14/03/2011",
         "TexCodigo": 1,
         "RegCodigo": 8,
         "ProCodigo": 2,
         "ExpCodigo": 4396,
-        "NumOposiciones": 49,
+        "NumOposicionesRaw": 49,
+        "NumOposiciones": "49 - Sí",
         "Estado": "CON OPOSICIÓN",
     },
     {
         "ExpConcatLlave": "ND-1302-413",
         "NumSolicitudes": 1,
+        "RutSolicitante": "69070100-5",
         "Solicitante": "ILUSTRE MUNICIPALIDAD DE PUENTE ALTO",
         "GLRegion": "Metropolitana de Santiago",
         "GLProvincia": "Cordillera",
         "GLComuna": "Puente Alto",
         "GLTipoDerecho": "Consuntivo",
+        "FechaSolicitud": "18/11/2009",
         "FechaInicio": "18/11/2009",
         "TexCodigo": 1,
         "RegCodigo": 13,
         "ProCodigo": 2,
         "ExpCodigo": 413,
-        "NumOposiciones": 2,
+        "NumOposicionesRaw": 2,
+        "NumOposiciones": "2 - Sí",
         "Estado": "CON OPOSICIÓN",
     },
     {
         "ExpConcatLlave": "NR-0601-1318",
         "NumSolicitudes": 1,
+        "RutSolicitante": "96543210-9",
         "Solicitante": "AGRICOLA EL ARRAYAN S.A.",
         "GLRegion": "del Libertador Gral. B. O'Higgins",
         "GLProvincia": "Cachapoal",
         "GLComuna": "Rancagua",
         "GLTipoDerecho": "Consuntivo",
+        "FechaSolicitud": "30/09/1999",
         "FechaInicio": "30/09/1999",
         "TexCodigo": 2,
         "RegCodigo": 6,
         "ProCodigo": 1,
         "ExpCodigo": 1318,
-        "NumOposiciones": 1,
+        "NumOposicionesRaw": 1,
+        "NumOposiciones": "1 - Sí",
         "Estado": "CON OPOSICIÓN",
+    },
+    {
+        "ExpConcatLlave": "ND-1301-5020",
+        "NumSolicitudes": 1,
+        "RutSolicitante": "12345678-9",
+        "Solicitante": "AGROCOMERCIAL LOS ANDES LTDA.",
+        "GLRegion": "Metropolitana de Santiago",
+        "GLProvincia": "Santiago",
+        "GLComuna": "Santiago Centro",
+        "GLTipoDerecho": "Consuntivo",
+        "FechaSolicitud": "15/01/2020",
+        "FechaInicio": "15/01/2020",
+        "TexCodigo": 1,
+        "RegCodigo": 13,
+        "ProCodigo": 6,
+        "ExpCodigo": 5020,
+        "NumOposicionesRaw": 0,
+        "NumOposiciones": "0 - No",
+        "Estado": "EN TRÁMITE",
     },
 ]
 
@@ -248,6 +287,53 @@ def fetch_comunas(reg_codigo: int, pro_codigo: int, conn=None) -> List[Dict[str,
         return DEMO_COMUNAS.get((reg_codigo, pro_codigo), [])
 
 
+DEMO_OPOSICIONES_STORE: Dict[str, List[Dict[str, Any]]] = {
+    "ND-0802-4437": [
+        {
+            "Correlativo": 1,
+            "NombreOpositor": "EMPRESA ELECTRICA RUCUE S.A.",
+            "RutOpositor": "96.852.140-5",
+            "FechaIngreso": "18/06/2012",
+            "NumeroSSDIngreso": "SSD-2012-00891",
+            "NumeroResolucion": "-1",
+            "NumeroSSDRes": None,
+            "FechaResolucion": None,
+            "Estado": "PENDIENTE",
+            "IdOposicion": 8101,
+            "Observaciones": "Oposición deducida dentro de plazo legal.",
+        },
+        {
+            "Correlativo": 2,
+            "NombreOpositor": "ASOCIACION DE CANALISTAS DEL LAJA",
+            "RutOpositor": "70.123.456-7",
+            "FechaIngreso": "25/06/2012",
+            "NumeroSSDIngreso": "SSD-2012-00945",
+            "NumeroResolucion": "-1",
+            "NumeroSSDRes": None,
+            "FechaResolucion": None,
+            "Estado": "PENDIENTE",
+            "IdOposicion": 8102,
+            "Observaciones": "Afectación eventual a derechos de terceros constituidos.",
+        },
+    ],
+    "NR-0601-1318": [
+        {
+            "Correlativo": 1,
+            "NombreOpositor": "ENDESA CHILE S.A.",
+            "RutOpositor": "90.001.000-K",
+            "FechaIngreso": "30/09/1999",
+            "NumeroSSDIngreso": "ENDESA, deduce oposi",
+            "NumeroResolucion": "-1",
+            "NumeroSSDRes": None,
+            "FechaResolucion": None,
+            "Estado": "PENDIENTE",
+            "IdOposicion": 7459,
+            "Observaciones": "Presentada en oficina de partes regional.",
+        }
+    ],
+}
+
+
 def search_expedientes(
     tipo_tramite: Optional[int] = None,
     reg_codigo: Optional[int] = None,
@@ -260,7 +346,7 @@ def search_expedientes(
 ) -> List[Dict[str, Any]]:
     """Busca solicitudes y expedientes en BD_EXP con conteo de oposiciones en vivo."""
     if conn is None:
-        res = DEMO_RESULTADOS_BUSQUEDA
+        res = list(DEMO_RESULTADOS_BUSQUEDA)
         if reg_codigo:
             res = [r for r in res if r["RegCodigo"] == reg_codigo]
         if exp_llave:
@@ -302,27 +388,33 @@ def search_expedientes(
     SELECT TOP {int(limit)}
         RTRIM(s.ExpConcatLlave) AS ExpConcatLlave, 
         COUNT(DISTINCT s.SolCodigo) AS NumSolicitudes,
+        COALESCE(RTRIM(MAX(s.RutPasSolicitante)), '') AS RutSolicitante,
         COALESCE(RTRIM(s.Solicitante), 'Sin Titular Registrado') AS Solicitante, 
         COALESCE(RTRIM(s.GLRegion), '') AS GLRegion, 
         COALESCE(RTRIM(s.GLProvincia), '') AS GLProvincia, 
         COALESCE(RTRIM(s.GLComuna), '') AS GLComuna, 
         COALESCE(RTRIM(s.GLTipoDerecho), 'Consuntivo') AS GLTipoDerecho, 
+        CONVERT(VARCHAR(10), MIN(s.FCInicioTramite), 103) AS FechaSolicitud,
         CONVERT(VARCHAR(10), MIN(s.FCInicioTramite), 103) AS FechaInicio,
         s.TexCodigo, s.RegCodigo, s.ProCodigo, s.ExpCodigo,
         (SELECT COUNT(*) FROM BD_EXP.dbo.Expt_EtapasSolDocOpoRec o 
          WHERE o.TexCodigo = s.TexCodigo AND o.RegCodigo = s.RegCodigo 
-           AND o.ProCodigo = s.ProCodigo AND o.ExpCodigo = s.ExpCodigo) AS NumOposiciones
+           AND o.ProCodigo = s.ProCodigo AND o.ExpCodigo = s.ExpCodigo) AS NumOposicionesRaw
     FROM BD_EXP.dbo.SolicitudEnTramite s
     WHERE {where_clause}
     GROUP BY s.ExpConcatLlave, s.Solicitante, s.GLRegion, s.GLProvincia, s.GLComuna, s.GLTipoDerecho,
              s.TexCodigo, s.RegCodigo, s.ProCodigo, s.ExpCodigo
-    ORDER BY NumOposiciones DESC, s.ExpCodigo DESC
+    ORDER BY NumOposicionesRaw DESC, s.ExpCodigo DESC
     """
 
     try:
         records = rows(conn, sql, *params)
         for r in records:
-            r["Estado"] = "CON OPOSICIÓN" if r.get("NumOposiciones", 0) > 0 else "EN TRÁMITE"
+            raw_count = int(r.get("NumOposicionesRaw") or 0)
+            r["NumOposicionesRaw"] = raw_count
+            r["NumOposiciones"] = f"{raw_count} - Sí" if raw_count > 0 else "0 - No"
+            r["Estado"] = "CON OPOSICIÓN" if raw_count > 0 else "EN TRÁMITE"
+            r["RutSolicitante"] = clean_rut(r.get("RutSolicitante"))
         return records
     except Exception as exc:
         return [{"error": str(exc)}]
@@ -335,45 +427,12 @@ def fetch_oposiciones_detalle(exp_llave: str, conn=None) -> List[Dict[str, Any]]
     clean_llave = exp_llave.strip().upper()
 
     if conn is None:
-        if "4437" in clean_llave:
-            return [
-                {
-                    "Correlativo": 1,
-                    "NombreOpositor": "EMPRESA ELECTRICA RUCUE S.A.",
-                    "FechaIngreso": "18/06/2012",
-                    "NumeroSSDIngreso": "SSD-2012-00891",
-                    "NumeroResolucion": "-1",
-                    "NumeroSSDRes": None,
-                    "FechaResolucion": None,
-                    "Estado": "PENDIENTE",
-                    "IdOposicion": 8101,
-                },
-                {
-                    "Correlativo": 2,
-                    "NombreOpositor": "ASOCIACION DE CANALISTAS DEL LAJA",
-                    "FechaIngreso": "25/06/2012",
-                    "NumeroSSDIngreso": "SSD-2012-00945",
-                    "NumeroResolucion": "-1",
-                    "NumeroSSDRes": None,
-                    "FechaResolucion": None,
-                    "Estado": "PENDIENTE",
-                    "IdOposicion": 8102,
-                },
-            ]
-        elif "1318" in clean_llave:
-            return [
-                {
-                    "Correlativo": 1,
-                    "NombreOpositor": "ENDESA CHILE S.A.",
-                    "FechaIngreso": "30/09/1999",
-                    "NumeroSSDIngreso": "ENDESA, deduce oposi",
-                    "NumeroResolucion": "-1",
-                    "NumeroSSDRes": None,
-                    "FechaResolucion": None,
-                    "Estado": "PENDIENTE",
-                    "IdOposicion": 7459,
-                }
-            ]
+        # Buscar en almacén de memoria demo
+        if clean_llave in DEMO_OPOSICIONES_STORE:
+            return list(DEMO_OPOSICIONES_STORE[clean_llave])
+        for k, v in DEMO_OPOSICIONES_STORE.items():
+            if k in clean_llave or clean_llave in k:
+                return list(v)
         return []
 
     sql = """
@@ -392,3 +451,111 @@ def fetch_oposiciones_detalle(exp_llave: str, conn=None) -> List[Dict[str, Any]]
         return res
     except Exception as exc:
         return [{"error": str(exc)}]
+
+
+def agregar_oposicion(
+    exp_codigo: str,
+    fecha_ingreso: str,
+    doc_nro: str,
+    opositor_nombre: str,
+    opositor_rut: str,
+    observaciones: str = "",
+    conn=None,
+) -> Dict[str, Any]:
+    """Registra una nueva oposición formal para el expediente en BD_EXP (o en sesión de memoria).
+    
+    Llama a BD_EXP.dbo.CPA_SaveIngresoOposicion_Portal con parámetros formales:
+      @CodigoExpediente, @EsdFech, @DocNro, @UniCodigo=1.
+    """
+    if not exp_codigo or not exp_codigo.strip():
+        return {"success": False, "message": "El código de expediente es obligatorio."}
+
+    clean_exp = exp_codigo.strip().upper()
+    clean_rut_opo = clean_rut(opositor_rut) if opositor_rut else "S/I"
+    clean_nombre = opositor_nombre.strip() if opositor_nombre else "OPOSITOR NO ESPECIFICADO"
+    clean_doc = doc_nro.strip() if doc_nro else f"SSD-{fecha_ingreso.replace('/', '')}-01"
+
+    if conn is not None:
+        try:
+            sql = """
+            DECLARE @status INT, @statusDesc VARCHAR(200), @IdInstancia_O INT, @NumeroOposicion_O INT;
+            EXEC BD_EXP.dbo.CPA_SaveIngresoOposicion_Portal
+                @CodigoExpediente = ?,
+                @EsdFech = ?,
+                @DocNro = ?,
+                @IdInstancia = NULL,
+                @IdDocumentoSHP = NULL,
+                @UniCodigo = 1,
+                @status = @status OUTPUT,
+                @statusDesc = @statusDesc OUTPUT,
+                @IdInstancia_O = @IdInstancia_O OUTPUT,
+                @NumeroOposicion_O = @NumeroOposicion_O OUTPUT;
+            SELECT @status AS status, @statusDesc AS statusDesc, @IdInstancia_O AS IdInstancia, @NumeroOposicion_O AS NumeroOposicion;
+            """
+            cur = conn.cursor()
+            cur.execute(sql, (clean_exp, fecha_ingreso, clean_doc))
+            row = cur.fetchone()
+            cur.close()
+            conn.commit()
+
+            if row:
+                st_code, st_desc, id_inst, num_opo = row[0], row[1], row[2], row[3]
+                if st_code == 0 or (id_inst and id_inst > 0):
+                    return {
+                        "success": True,
+                        "message": f"Oposición registrada exitosamente en BD_EXP. Instancia N° {id_inst}, N° Oposición: {num_opo}",
+                        "id_instancia": id_inst,
+                        "numero_oposicion": num_opo,
+                        "expediente": clean_exp,
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": f"Error retornado por CPA_SaveIngresoOposicion_Portal: {st_desc} (código {st_code})",
+                        "expediente": clean_exp,
+                    }
+            return {
+                "success": True,
+                "message": "Oposición registrada en BD_EXP.",
+                "expediente": clean_exp,
+            }
+        except Exception as exc:
+            return {"success": False, "message": f"Error SQL al registrar oposición: {str(exc)}", "expediente": clean_exp}
+
+    # Modo Demostración / Memoria Local
+    import random
+    new_id = random.randint(8200, 9999)
+    existing_list = DEMO_OPOSICIONES_STORE.setdefault(clean_exp, [])
+    new_correlativo = len(existing_list) + 1
+
+    new_entry = {
+        "Correlativo": new_correlativo,
+        "NombreOpositor": clean_nombre,
+        "RutOpositor": clean_rut_opo,
+        "FechaIngreso": fecha_ingreso,
+        "NumeroSSDIngreso": clean_doc,
+        "NumeroResolucion": "-1",
+        "NumeroSSDRes": None,
+        "FechaResolucion": None,
+        "Estado": "PENDIENTE",
+        "IdOposicion": new_id,
+        "Observaciones": observaciones.strip() if observaciones else "Ingreso manual desde Portal DGA Gob.cl",
+    }
+    existing_list.append(new_entry)
+
+    # Actualizar DEMO_RESULTADOS_BUSQUEDA si está presente
+    for item in DEMO_RESULTADOS_BUSQUEDA:
+        if item["ExpConcatLlave"].upper() == clean_exp:
+            item["NumOposicionesRaw"] = item.get("NumOposicionesRaw", 0) + 1
+            item["NumOposiciones"] = f"{item['NumOposicionesRaw']} - Sí"
+            item["Estado"] = "CON OPOSICIÓN"
+            break
+
+    return {
+        "success": True,
+        "message": f"Oposición registrada exitosamente en BD_EXP (Modo Simulación). Instancia N° {new_id}, N° Oposición: {new_correlativo}",
+        "id_instancia": new_id,
+        "numero_oposicion": new_correlativo,
+        "expediente": clean_exp,
+    }
+
