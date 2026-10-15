@@ -12,6 +12,7 @@ from src.analysis import (BASELINE, LAYERS, baseline, parameters, patterns,
 from src.config import ROOT, load_settings
 from src.demo import demo_events
 from src.export import csv_bytes, excel_bytes, markdown_rag_summary
+from src.inspector import parse_expediente, SECUENCIA_SEARCH_SOLICITUDES
 from src.service import error_text, launch, prepare, recover
 from src.store import Store
 
@@ -41,7 +42,7 @@ else:
 st.metric("Eventos", str(len(events)))
 
 section = st.radio("Sección",
-                   ["Secuencia y árbol", "Patrones", "Línea base",
+                   ["Secuencia y árbol", "Inspector searchSolicitudes", "Patrones", "Línea base",
                     "Evidencia", "Control QA"],
                    key="section")
 
@@ -55,6 +56,49 @@ if section == "Secuencia y árbol":
     if roots:
         root = st.selectbox("Raíz", roots, key="tree_root")
         st.code(tree_diagram(nodes, root))
+
+elif section == "Inspector searchSolicitudes":
+    st.subheader("🔍 Inspector de Expedientes (searchSolicitudes.xhtml)")
+    st.caption("Visualiza los Stored Procedures y Lugares de Almacenamiento (tablas) que entrega la consulta en Oposiciones.")
+    st.markdown("Portal Web: [dga-snia.mop.gov.cl/oposiciones/...](http://dga-snia.mop.gov.cl/oposiciones/site/solicitud/searchSolicitudes.xhtml)")
+
+    col_in1, col_in2 = st.columns([2, 1])
+    with col_in1:
+        exp_input = st.text_input("Código de Expediente", value="ND-1204-390", key="exp_query_input")
+    with col_in2:
+        st.write("")
+        st.write("")
+        st.info("Ejemplos: `ND-1204-390`, `NR-1301-456`, `VP-0501-100`")
+
+    exp_data = parse_expediente(exp_input)
+    if exp_data:
+        st.success(f"**Expediente Identificado:** `{exp_data['codigo_completo']}` — {exp_data['tipo_nombre']}")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Tipo Código (@TexCodigo)", str(exp_data["tex_codigo"]))
+        c2.metric("Región (@RegCodigo)", str(exp_data["reg_codigo"]))
+        c3.metric("Provincia (@ProCodigo)", str(exp_data["pro_codigo"]))
+        c4.metric("Correlativo (@ExpCodigo)", str(exp_data["exp_codigo"]))
+
+        st.subheader("📂 Lugares de Almacenamiento (Tablas) y Secuencia de SPs")
+        st.dataframe(pd.DataFrame(SECUENCIA_SEARCH_SOLICITUDES))
+
+        with st.expander("Ver Diagrama de Flujo de Datos (Mermaid)"):
+            st.code(
+                f'''flowchart TD
+Web["searchSolicitudes.xhtml ({exp_data['codigo_completo']})"] --> SP1["1. CPA_BusquedaExpedientesOp"]
+SP1 --> T1[("{exp_data['tabla_objeto_principal']}")]
+SP1 --> T2[("BD_EXP..Expt_Solicitud")]
+SP1 --> T3[("BD_EXP..Expt_SituacionActualSolic")]
+Web --> SP2["2. 10 SPs Secuenciales (Exps_*)"]
+SP2 --> T4[("BD_EXP..Expt_Expediente")]
+SP2 --> T5[("BD_EXP..Expt_Resolucion")]
+SP2 --> T6[("BD_PAR..Part_ClasificFuente")]
+SP2 --> T7[("BD_EXP..Expt_Etapas")]
+SP2 --> T8[("BD_EXP..Expt_FechasExpediente")]''',
+                language="mermaid"
+            )
+    else:
+        st.warning("Formato no reconocido. Ingrese el código con formato PREFIJO-REGIONPROVINCIA-NUMERO (ej: ND-1204-390).")
 
 elif section == "Patrones":
     st.dataframe(patterns(events))

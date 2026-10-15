@@ -6,7 +6,7 @@ def test_demo_navigation_and_export():
     app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=20).run()
     assert not app.exception
     assert app.metric[0].value == "50"
-    for section in ["Secuencia y árbol", "Patrones", "Línea base", "Evidencia", "Control QA"]:
+    for section in ["Secuencia y árbol", "Inspector searchSolicitudes", "Patrones", "Línea base", "Evidencia", "Control QA"]:
         app.radio(key="section").set_value(section).run()
         assert not app.exception, section
     app.radio(key="section").set_value("Evidencia").run()

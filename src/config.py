@@ -23,14 +23,14 @@ class Settings:
     query_timeout: int = 20
 
     def validate(self):
-        if self.environment != "QA":
-            raise ValueError("Esta versión solo admite environment = QA.")
+        if self.environment not in ("QA", "PROD"):
+            raise ValueError("Esta versión solo admite environment = 'QA' o 'PROD'.")
         if not self.server or not self.expected_server_name:
             raise ValueError("Configure servidor y expected_server_name.")
         if not self.login_filter.strip():
             raise ValueError("Se requiere login_filter para limitar la captura.")
         if not self.databases or any(not x.strip() for x in self.databases):
-            raise ValueError("Configure las bases QA esperadas.")
+            raise ValueError("Configure las bases esperadas (ej. BD_EXP, BD_PAR, BD_MAP).")
         if self.xel_directory not in (".", "DEFAULT"):
             if not ((PureWindowsPath(self.xel_directory).is_absolute()
                      or PurePosixPath(self.xel_directory).is_absolute())

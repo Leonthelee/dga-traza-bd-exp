@@ -27,8 +27,10 @@ def metadata():
 
 
 def test_qa_guard_and_connection_escaping(settings):
-    with pytest.raises(ValueError):
-        replace(settings, environment="PROD").validate()
+    with pytest.raises(ValueError, match="environment"):
+        replace(settings, environment="DEV_TEST").validate()
+    # PROD is now allowed
+    replace(settings, environment="PROD").validate()
     text = connection_string(replace(settings, trusted_connection=False, username="u", password="x};SERVER=other"))
     assert "PWD={x}};SERVER=other}" in text
 
@@ -144,3 +146,18 @@ def test_markdown_rag_summary_export():
     assert "DGA Core Tools - by Daniel Díaz L. & AI Engine Antigravity" in md
     assert "flowchart TD" in md
     assert "Procedimientos y Módulos Identificados" in md
+
+
+def test_parse_expediente_and_search_solicitudes_mapping():
+    from src.inspector import parse_expediente, SECUENCIA_SEARCH_SOLICITUDES
+    info = parse_expediente("ND-1204-390")
+    assert info is not None
+    assert info["tex_codigo"] == 1
+    assert info["reg_codigo"] == 12
+    assert info["pro_codigo"] == 4
+    assert info["exp_codigo"] == 390
+    assert info["tabla_objeto_principal"] == "BD_EXP..Expt_ObjetoNegocioND"
+
+    assert len(SECUENCIA_SEARCH_SOLICITUDES) == 10
+    assert SECUENCIA_SEARCH_SOLICITUDES[0]["sp"] == "CPA_BusquedaExpedientesOp"
+    assert parse_expediente("invalido") is None
