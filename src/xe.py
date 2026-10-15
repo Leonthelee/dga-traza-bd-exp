@@ -62,11 +62,16 @@ def build_sql(settings, name, profile, metadata, spid=0, threshold_ms=0):
                 raise ValueError(f"No se pudo confirmar la unidad duration de {event}; use umbral 0.")
             where += f" AND ([duration]>=({int(threshold_ms) * 1000}))"
         events.append(f"ADD EVENT [sqlserver].[{event}](ACTION({actions}) WHERE ({where}))")
-    path = str(PureWindowsPath(settings.xel_directory) / (name + ".xel"))
+    if not settings.xel_directory or settings.xel_directory in (".", "DEFAULT") or settings.xel_directory.startswith("/"):
+        path = name + ".xel"
+        pattern = name + "*.xel"
+    else:
+        path = str(PureWindowsPath(settings.xel_directory) / (name + ".xel"))
+        pattern = path[:-4] + "*.xel"
     sql = f"CREATE EVENT SESSION {ident} ON SERVER\n" + ",\n".join(events)
     sql += f"\nADD TARGET [package0].[event_file](SET filename={literal(path)},max_file_size=(64),max_rollover_files=(8))"
     sql += "\nWITH (MAX_MEMORY=4096 KB,EVENT_RETENTION_MODE=ALLOW_SINGLE_EVENT_LOSS,MAX_DISPATCH_LATENCY=5 SECONDS,TRACK_CAUSALITY=ON,STARTUP_STATE=OFF);"
-    return sql, path[:-4] + "*.xel"
+    return sql, pattern
 
 
 def status(conn, name):

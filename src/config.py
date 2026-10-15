@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PureWindowsPath, PurePosixPath
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,9 +31,11 @@ class Settings:
             raise ValueError("Se requiere login_filter para limitar la captura.")
         if not self.databases or any(not x.strip() for x in self.databases):
             raise ValueError("Configure las bases QA esperadas.")
-        if not (PureWindowsPath(self.xel_directory).is_absolute()
-                and not any(c in self.xel_directory for c in "*?\n\r")):
-            raise ValueError("xel_directory debe ser una ruta Windows absoluta sin comodines.")
+        if self.xel_directory not in (".", "DEFAULT"):
+            if not ((PureWindowsPath(self.xel_directory).is_absolute()
+                     or PurePosixPath(self.xel_directory).is_absolute())
+                    and not any(c in self.xel_directory for c in "*?\n\r")):
+                raise ValueError("xel_directory debe ser una ruta absoluta válida o 'DEFAULT'.")
         if not self.trusted_connection and not (self.username and self.password):
             raise ValueError("Configure usuario y contraseña o autenticación integrada.")
         if not 1 <= self.query_timeout <= 60:

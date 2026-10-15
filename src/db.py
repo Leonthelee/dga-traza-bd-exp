@@ -56,8 +56,8 @@ def preflight(conn, settings):
     result = rows(conn, "SELECT CAST(@@SERVERNAME AS nvarchar(128)) server_name,\n"
                         "        CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(128)) version,\n"
                         "        CAST(SERVERPROPERTY('Edition') AS nvarchar(128)) edition,\n"
-                        "        HAS_PERMS_BY_NAME(NULL, 'SERVER', 'ALTER ANY EVENT SESSION') can_control,\n"
-                        "        HAS_PERMS_BY_NAME(NULL, 'SERVER', 'VIEW SERVER STATE') can_read")[0]
+                        "        COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, 'ALTER ANY EVENT SESSION'), HAS_PERMS_BY_NAME(NULL, 'SERVER', 'ALTER ANY EVENT SESSION')) can_control,\n"
+                        "        COALESCE(HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW SERVER STATE'), HAS_PERMS_BY_NAME(NULL, 'SERVER', 'VIEW SERVER STATE')) can_read")[0]
     if result["server_name"].casefold() != settings.expected_server_name.casefold():
         raise ValueError("El servidor conectado no coincide con expected_server_name. Operación bloqueada.")
     major = int(result["version"].split(".")[0])
