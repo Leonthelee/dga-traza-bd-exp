@@ -5,3 +5,4 @@ __pycache__/
 .streamlit/secrets.toml
 *.xel
 data/*.sqlite3
+data/*.log
