@@ -42,12 +42,30 @@ class Settings:
             raise ValueError("query_timeout debe estar entre 1 y 60 segundos.")
 
 
-def load_settings(path=None):
+def load_settings(path=None, env=None):
     file = Path(path) if path else ROOT / ".streamlit" / "secrets.toml"
     if not file.exists():
-        raise ValueError("Falta .streamlit/secrets.toml. Copie secrets.example.toml y configure QA.")
+        raise ValueError("Falta .streamlit/secrets.toml. Copie secrets.example.toml y configure credenciales.")
     with file.open("rb") as f:
-        values = tomllib.load(f)["sql"]
+        data = tomllib.load(f)
+
+    if env == "PROD" and "sql_prod" in data:
+        values = data["sql_prod"]
+    elif env == "QA" and "sql_qa" in data:
+        values = data["sql_qa"]
+    elif "sql" in data:
+        values = data["sql"]
+    elif "sql_prod" in data and env == "PROD":
+        values = data["sql_prod"]
+    elif "sql_qa" in data and env == "QA":
+        values = data["sql_qa"]
+    elif "sql_prod" in data:
+        values = data["sql_prod"]
+    elif "sql_qa" in data:
+        values = data["sql_qa"]
+    else:
+        raise ValueError("Configure la sección [sql], [sql_prod] o [sql_qa] en .streamlit/secrets.toml.")
+
     values["databases"] = tuple(values.get("databases", []))
     settings = Settings(**values)
     settings.validate()

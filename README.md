@@ -28,23 +28,22 @@ Herramienta satélite y autónoma de diagnóstico forense para capturar trazas d
 
 ---
 
-## 🔑 Configuración de Servidores: QA vs. Producción
+## 🔑 Configuración de Servidores: Producción vs. QA
 
 El repositorio viene preparado con las plantillas en `.streamlit/secrets.example.toml`. El usuario/tester que ejecute la herramienta debe configurar su `.streamlit/secrets.toml` local:
 
-### 1. Ambiente QA (Por Defecto)
+### 1. Ambiente PRODUCCIÓN (172.16.71.41 PRO-SQLWSPCLU) — Destino Oficial
+- **Servidor:** `172.16.71.41`
+- **Instancia:** `PRO-SQLWSPCLU`
+- **Ambiente:** `environment = "PROD"`
+- **Usuario:** Ingresar credencial o llave institucional autorizada (`cpa_admin` o usuario con rol `db_datareader` sobre las bases institucionales `BD_EXP`, `BD_PAR`, `BD_MAP`).
+- **Seguridad:** CERO escrituras (`SELECT` y ejecución de SPs canónicos únicamente). Totalmente seguro para operar en el clúster productivo.
+
+### 2. Ambiente QA (172.19.30.111 pro-dga-sql2019) — Pruebas Previas
 - **Servidor:** `172.19.30.111`
 - **Instancia:** `pro-dga-sql2019`
 - **Ambiente:** `environment = "QA"`
 - **Usuario QA:** `sql.soaint`
-
-### 2. Ambiente PRODUCCIÓN (Requiere Key / Llave del Operador)
-Para desplegar la traza en el clúster productivo institucional:
-- **Servidor:** `172.16.71.41`
-- **Instancia:** `PRO-SQLWSPCLU`
-- **Ambiente:** `environment = "PROD"`
-- **Usuario:** Ingresar credencial institucional autorizada (`login_filter` obligatorio para no generar overhead).
-- **Seguridad:** La herramienta realiza **CERO escrituras** en las bases de datos de negocio (`BD_EXP`, `BD_PAR`, `BD_MAP`).
 
 ---
 

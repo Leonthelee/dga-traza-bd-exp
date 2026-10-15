@@ -126,14 +126,19 @@ st.markdown("""
 
 # Panel de Telemetría y Configuración (Colapsado por defecto para mantener limpio el front institucional)
 st.sidebar.markdown("### ⚙️ Telemetría & Entorno DGA")
-mode = st.sidebar.radio("Modo de Operación", ["Demo sintética", "SQL Server QA"], key="mode")
+mode = st.sidebar.radio(
+    "Ambiente / Modo",
+    ["Producción (172.16.71.41)", "SQL Server QA", "Demo sintética"],
+    key="mode",
+)
 
-events, raws, store, cap_id, settings = [], {}, None, None, None
-if mode == "Demo sintética":
-    events, raws = demo_events()
-else:
+events, raws, store, cap_id, settings, settings_error = [], {}, None, None, None, None
+is_db_mode = mode != "Demo sintética"
+target_env = "PROD" if "Producción" in mode else "QA"
+
+if is_db_mode:
     try:
-        settings = load_settings()
+        settings = load_settings(env=target_env)
     except Exception as exc:
         settings = None
         settings_error = str(exc)
@@ -143,6 +148,8 @@ else:
         if ids:
             cap_id = st.sidebar.selectbox("Captura", ids, key="qa_cap")
             events = store.events(cap_id)
+else:
+    events, raws = demo_events()
 
 st.sidebar.metric("Eventos Telemetría", str(len(events)))
 
@@ -165,34 +172,61 @@ if section == "Módulo Oposiciones (Gob.cl)":
     st.caption("Módulo de consulta institucional. Reemplazo del servicio IBM BPM (Mis proyectos : Módulo de Oposiciones).")
     st.markdown("Portal Web: [dga-snia.mop.gov.cl/oposiciones/...](http://dga-snia.mop.gov.cl/oposiciones/site/solicitud/searchSolicitudes.xhtml)")
 
-    is_qa = (mode == "SQL Server QA" and settings is not None)
+    if is_db_mode and settings is not None:
+        st.info(f"🟢 **Conectado a:** `{settings.environment}` — Servidor `{settings.server}` (`{settings.expected_server_name}`) • Bases: `{', '.join(settings.databases)}`")
+    elif is_db_mode and settings_error:
+        st.warning(f"⚠️ **Atención:** {settings_error}. Operando en modo demostración.")
 
-    def _get_tipos(qa_flag: bool):
-        if qa_flag:
-            with connect(settings) as c:
-                return fetch_tipos_tramite(c)
+    def _safe_connect():
+        if is_db_mode and settings is not None:
+            try:
+                return connect(settings)
+            except Exception:
+                return None
+        return None
+
+    def _get_tipos():
+        ctx = _safe_connect()
+        if ctx:
+            try:
+                with ctx as c:
+                    return fetch_tipos_tramite(c)
+            except Exception:
+                pass
         return fetch_tipos_tramite(None)
 
-    def _get_regiones(qa_flag: bool):
-        if qa_flag:
-            with connect(settings) as c:
-                return fetch_regiones(c)
+    def _get_regiones():
+        ctx = _safe_connect()
+        if ctx:
+            try:
+                with ctx as c:
+                    return fetch_regiones(c)
+            except Exception:
+                pass
         return fetch_regiones(None)
 
-    def _get_provincias(reg: int, qa_flag: bool):
-        if qa_flag:
-            with connect(settings) as c:
-                return fetch_provincias(reg, c)
+    def _get_provincias(reg: int):
+        ctx = _safe_connect()
+        if ctx:
+            try:
+                with ctx as c:
+                    return fetch_provincias(reg, c)
+            except Exception:
+                pass
         return fetch_provincias(reg, None)
 
-    def _get_comunas(reg: int, pro: int, qa_flag: bool):
-        if qa_flag:
-            with connect(settings) as c:
-                return fetch_comunas(reg, pro, c)
+    def _get_comunas(reg: int, pro: int):
+        ctx = _safe_connect()
+        if ctx:
+            try:
+                with ctx as c:
+                    return fetch_comunas(reg, pro, c)
+            except Exception:
+                pass
         return fetch_comunas(reg, pro, None)
 
-    tipos_list = _get_tipos(is_qa)
-    regiones_list = [{"RegCodigo": 0, "RegNombre": "Todas las Regiones", "OrdenGeo": 0}] + _get_regiones(is_qa)
+    tipos_list = _get_tipos()
+    regiones_list = [{"RegCodigo": 0, "RegNombre": "Todas las Regiones", "OrdenGeo": 0}] + _get_regiones()
 
     # 1. Filtros en Cascada
     st.markdown("##### 📍 Filtros Institucionales en Cascada (BD_PAR)")
@@ -212,7 +246,7 @@ if section == "Módulo Oposiciones (Gob.cl)":
 
     with c_f3:
         if selected_reg > 0:
-            provs = [{"ProCodigo": 0, "ProNombre": "Todas las Provincias"}] + _get_provincias(selected_reg, is_qa)
+            provs = [{"ProCodigo": 0, "ProNombre": "Todas las Provincias"}] + _get_provincias(selected_reg)
         else:
             provs = [{"ProCodigo": 0, "ProNombre": "Seleccione Región primero"}]
         pro_map = {p["ProNombre"]: p["ProCodigo"] for p in provs}
@@ -221,7 +255,7 @@ if section == "Módulo Oposiciones (Gob.cl)":
 
     with c_f4:
         if selected_reg > 0 and selected_pro > 0:
-            coms = [{"ComCodigo": 0, "ComNombre": "Todas las Comunas"}] + _get_comunas(selected_reg, selected_pro, is_qa)
+            coms = [{"ComCodigo": 0, "ComNombre": "Todas las Comunas"}] + _get_comunas(selected_reg, selected_pro)
         else:
             coms = [{"ComCodigo": 0, "ComNombre": "Seleccione Provincia primero"}]
         com_map = {c["ComNombre"]: c["ComCodigo"] for c in coms}
@@ -240,19 +274,24 @@ if section == "Módulo Oposiciones (Gob.cl)":
         btn_buscar = st.button("🔍 Buscar Oposiciones", key="btn_buscar_oposiciones", type="primary")
 
     if btn_buscar or "opo_cached_results" not in st.session_state:
-        if is_qa:
-            with connect(settings) as c:
-                results = search_expedientes(
-                    tipo_tramite=selected_tex if selected_tex > 0 else None,
-                    reg_codigo=selected_reg if selected_reg > 0 else None,
-                    pro_codigo=selected_pro if selected_pro > 0 else None,
-                    com_codigo=selected_com if selected_com > 0 else None,
-                    exp_llave=filtro_exp if filtro_exp.strip() else None,
-                    solicitante=filtro_sol if filtro_sol.strip() else None,
-                    limit=50,
-                    conn=c,
-                )
-        else:
+        ctx = _safe_connect()
+        results = None
+        if ctx:
+            try:
+                with ctx as c:
+                    results = search_expedientes(
+                        tipo_tramite=selected_tex if selected_tex > 0 else None,
+                        reg_codigo=selected_reg if selected_reg > 0 else None,
+                        pro_codigo=selected_pro if selected_pro > 0 else None,
+                        com_codigo=selected_com if selected_com > 0 else None,
+                        exp_llave=filtro_exp if filtro_exp.strip() else None,
+                        solicitante=filtro_sol if filtro_sol.strip() else None,
+                        limit=50,
+                        conn=c,
+                    )
+            except Exception:
+                results = None
+        if not results or (results and "error" in results[0]):
             results = search_expedientes(
                 tipo_tramite=selected_tex if selected_tex > 0 else None,
                 reg_codigo=selected_reg if selected_reg > 0 else None,
@@ -284,7 +323,7 @@ if section == "Módulo Oposiciones (Gob.cl)":
         df_res = pd.DataFrame(results)
         cols_show = ["ExpConcatLlave", "NumSolicitudes", "Solicitante", "GLRegion", "GLProvincia", "GLComuna", "GLTipoDerecho", "NumOposiciones", "Estado"]
         cols_present = [c for c in cols_show if c in df_res.columns]
-        st.dataframe(df_res[cols_present], use_container_width=True)
+        st.dataframe(df_res[cols_present], width="stretch")
 
         st.markdown("##### 🔎 Ficha Técnica y Detalle de Oposiciones del Expediente")
         exp_options = [r["ExpConcatLlave"] for r in results]
@@ -302,10 +341,15 @@ if section == "Módulo Oposiciones (Gob.cl)":
             t_op1, t_op2, t_op3 = st.tabs(["📑 Oposiciones Formales (SNIA)", "🗄️ Lugares de Almacenamiento (BD_EXP)", "💾 Exportar Datos"])
             with t_op1:
                 st.caption(f"Detalle formal de oposiciones para `{selected_exp}` vía `BD_EXP.dbo.CPA_BusquedaOpExpedientes_SNIA`.")
-                if is_qa:
-                    with connect(settings) as c:
-                        detalle_op = fetch_oposiciones_detalle(selected_exp, conn=c)
-                else:
+                ctx = _safe_connect()
+                detalle_op = None
+                if ctx:
+                    try:
+                        with ctx as c:
+                            detalle_op = fetch_oposiciones_detalle(selected_exp, conn=c)
+                    except Exception:
+                        detalle_op = None
+                if not detalle_op or (detalle_op and "error" in detalle_op[0]):
                     detalle_op = fetch_oposiciones_detalle(selected_exp, conn=None)
 
                 if detalle_op and "error" in detalle_op[0]:
@@ -313,11 +357,11 @@ if section == "Módulo Oposiciones (Gob.cl)":
                 elif not detalle_op:
                     st.info("Este expediente no registra oposiciones formales ingresadas en SNIA.")
                 else:
-                    st.dataframe(pd.DataFrame(detalle_op), use_container_width=True)
+                    st.dataframe(pd.DataFrame(detalle_op), width="stretch")
 
             with t_op2:
                 st.caption("Tablas de almacenamiento y mapeo relacional en BD_EXP / BD_PAR:")
-                st.dataframe(pd.DataFrame(SECUENCIA_SEARCH_SOLICITUDES), use_container_width=True)
+                st.dataframe(pd.DataFrame(SECUENCIA_SEARCH_SOLICITUDES), width="stretch")
 
             with t_op3:
                 c_x1, c_x2 = st.columns(2)
