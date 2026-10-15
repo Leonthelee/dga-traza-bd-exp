@@ -424,7 +424,92 @@ if section == "Módulo Oposiciones (Gob.cl)":
             "Estado": "Estado",
         }
         df_display = df_res[cols_present].rename(columns=rename_map)
-        st.dataframe(df_display, width="stretch")
+        df_display["Agregar Oposicion"] = "Agregar Oposicion"
+
+        def on_agregar_col_click():
+            click_info = st.session_state.get("btn_col_agregar_opo")
+            if click_info:
+                row_idx = click_info.row if hasattr(click_info, "row") else click_info.get("row")
+                if row_idx is not None and 0 <= row_idx < len(results):
+                    st.session_state["opo_target_exp"] = results[row_idx]["ExpConcatLlave"]
+                    st.session_state["show_agregar_modal"] = True
+
+        st.dataframe(
+            df_display,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "Agregar Oposicion": st.column_config.ButtonColumn(
+                    label="Agregar Oposicion",
+                    help="Registrar formalmente una nueva oposición para este expediente.",
+                    type="primary",
+                    key="btn_col_agregar_opo",
+                    on_click=on_agregar_col_click,
+                ),
+            },
+        )
+
+        @st.dialog("➕ Formulario Oficial: Agregar Oposición a Expediente")
+        def modal_agregar_oposicion_dialog(exp_codigo: str):
+            st.markdown(f"**Expediente Seleccionado:** `{exp_codigo}`")
+            st.caption("Deducción formal de oposición ante la Dirección General de Aguas (`BD_EXP.dbo.CPA_SaveIngresoOposicion_Portal`).")
+            
+            import datetime
+            c_m_1, c_m_2 = st.columns(2)
+            with c_m_1:
+                dlg_fecha = st.date_input("Fecha de Ingreso de Oposición", value=datetime.date.today(), key="dlg_opo_fecha")
+                dlg_doc = st.text_input("N° Documento / N° SSD / Carta", placeholder="Ej: SSD-2026-00412 o CARTA-01", key="dlg_opo_doc")
+            with c_m_2:
+                dlg_rut = st.text_input("RUT del Opositor", placeholder="Ej: 12345678-9", key="dlg_opo_rut")
+                dlg_nombre = st.text_input("Nombre / Razón Social Opositor", placeholder="Ej: COMUNIDAD DE AGUAS CANAL EL CARMEN", key="dlg_opo_nombre")
+                
+            dlg_obs = st.text_area("Observaciones / Fundamento Legal", placeholder="Deduce oposición por eventual afectación de caudales y derechos constituidos...", key="dlg_opo_obs", height=90)
+            
+            c_b1, c_b2 = st.columns([2, 1])
+            with c_b1:
+                btn_dlg_exec = st.button("💾 Registrar en BD_EXP", type="primary", key="btn_dlg_exec")
+            with c_b2:
+                btn_dlg_cancel = st.button("Cancelar", key="btn_dlg_cancel")
+                
+            if btn_dlg_cancel:
+                st.session_state["show_agregar_modal"] = False
+                st.rerun()
+                
+            if btn_dlg_exec:
+                fecha_str = dlg_fecha.strftime("%d/%m/%Y")
+                ctx = _safe_connect()
+                conn_to_use = None
+                if ctx:
+                    try:
+                        conn_to_use = ctx.__enter__()
+                    except Exception:
+                        conn_to_use = None
+                
+                resp = agregar_oposicion(
+                    exp_codigo=exp_codigo,
+                    fecha_ingreso=fecha_str,
+                    doc_nro=dlg_doc,
+                    opositor_nombre=dlg_nombre,
+                    opositor_rut=dlg_rut,
+                    observaciones=dlg_obs,
+                    conn=conn_to_use,
+                )
+                if ctx and conn_to_use:
+                    try:
+                        ctx.__exit__(None, None, None)
+                    except Exception:
+                        pass
+                        
+                if resp.get("success"):
+                    st.success(resp.get("message"))
+                    st.session_state["show_agregar_modal"] = False
+                    st.session_state.pop("opo_cached_results", None)
+                    st.rerun()
+                else:
+                    st.error(resp.get("message"))
+
+        if st.session_state.get("show_agregar_modal") and st.session_state.get("opo_target_exp"):
+            modal_agregar_oposicion_dialog(st.session_state["opo_target_exp"])
 
         st.markdown("##### 🔎 Ficha Técnica y Detalle de Oposiciones del Expediente")
         exp_options = [r["ExpConcatLlave"] for r in results]
