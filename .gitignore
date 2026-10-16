@@ -4,5 +4,6 @@ __pycache__/
 .pytest_cache/
 .streamlit/secrets.toml
 *.xel
-data/*.sqlite3
+data/*.sqlite3*
 data/*.log
+data/*.jsonl

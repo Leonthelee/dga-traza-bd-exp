@@ -77,3 +77,19 @@ El repositorio viene preparado con las plantillas en `.streamlit/secrets.example
 La herramienta genera automáticamente resúmenes ejecutivos en Markdown con diagramas Mermaid del árbol de llamadas y tablas de procedimientos para inyectar en el Centinela RAG:
 - **Ruta de exportación:** `dga-bpm-orchestrator/backend/knowledge/05_trazabilidad_sp_bd_exp.md`
 - **Uso en RAG:** Protege la generación de consultas y valida el ciclo de vida de expedientes contrastando los SPs esperados vs reales.
+
+---
+
+## 🛡️ Gobernanza y Gestión de Riesgos de IA (ISO/IEC 42001 & ISO/IEC 23894)
+
+El sistema implementa controles criptográficos y de mitigación de riesgo listos para producción (`src/governance.py` y vista **Gobernanza IA (ISO 42001 / 23894)**):
+
+1. **Log Estructurado de Auditoría en Formato JSONL (`ISO/IEC 42001 A.6.2.8 / A.9.3`):**
+   - Cada consulta (`search_expedientes`, `fetch_oposiciones_detalle`, `agregar_oposicion`, `inspect_expediente`, `rag_knowledge_query`, `export_markdown_rag_summary`) se registra automáticamente en `data/audit_iso42001.jsonl`.
+   - Incluye encadenamiento criptográfico inmutable (`prev_entry_sha256` $\rightarrow$ `entry_sha256`) verificable en vivo mediante `AuditLogger.verify_chain()`.
+2. **Integridad Criptográfica SHA-256 de Archivos y Fragmentos (`ISO/IEC 42001 A.7.4`):**
+   - Cada archivo fuente de la base de conocimiento y cada expediente, oposición o fragmento recuperado incluye su digest criptográfico `sha256` canónico de 64 caracteres hexadecimales.
+3. **Mitigación de Alucinaciones, Distancia Vectorial y Cláusulas de Abstención (`ISO/IEC 23894 6.4.3`):**
+   - El motor `HallucinationGuard` calcula y registra la **distancia vectorial coseno** ($d = 1 - \text{similitud\_coseno}$), la similitud coseno y la distancia euclidiana $L_2$ de cada fragmento recuperado.
+   - Si la distancia vectorial mínima supera el umbral de seguridad configurado ($d > d_{\max}$), o no existen registros verificados, el sistema activa automáticamente la **Cláusula de Abstención Forzada**, bloqueando cualquier extrapolación o alucinación.
+

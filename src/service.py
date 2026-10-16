@@ -28,6 +28,7 @@ def prepare(settings, label, profile, minutes, spid=0, threshold_ms=0):
     sql, pattern = xe.build_sql(settings, "TrazaQA_" + id, profile, metadata, spid, threshold_ms)
     return {"id": id, "name": "TrazaQA_" + id, "label": label.strip()[:150], "profile": profile,
             "minutes": int(minutes), "spid": int(spid), "threshold_ms": int(threshold_ms),
+            "environment": settings.environment,
             "sql": sql, "pattern": pattern, "metadata": metadata, "server": info,
             "fingerprint": fingerprint(settings)}
 

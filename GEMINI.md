@@ -28,3 +28,9 @@
      ```powershell
      $env:PYTHONPATH="."; .\.venv\Scripts\python.exe -m pytest -v
      ```
+
+5. **Controles Normativos de Producción (ISO/IEC 42001 & ISO/IEC 23894):**
+   - **Auditoría JSONL (`data/audit_iso42001.jsonl`):** Toda consulta o recuperación de datos debe registrarse mediante `src/governance.py` (`AuditLogger`) manteniendo la cadena de integridad SHA-256.
+   - **Trazabilidad Criptográfica SHA-256:** Cada archivo y fragmento/registro recuperado debe calcular y conservar su hash SHA-256 (`compute_file_sha256`, `stamp_fragments_collection`).
+   - **Mitigación de Alucinaciones y Abstención:** Toda consulta RAG o inferencia técnica debe registrar su distancia vectorial de similitud (`cosine_distance`) y forzar cláusulas de abstención (`SYSTEM_ABSTENTION_GUARDRAIL` / `ABSTENCIÓN FORZADA`) cuando la distancia supere el umbral permitido.
+

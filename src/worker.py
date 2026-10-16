@@ -22,7 +22,10 @@ def run(id, store):
         return bool(store.get(id)["stop_requested"]) or datetime.now(timezone.utc) >= datetime.fromisoformat(capture["deadline"])
 
     try:
-        settings = load_settings()
+        try:
+            settings = load_settings(env=capture.get("environment"))
+        except TypeError:
+            settings = load_settings()
         validate_capture(settings, capture)
         with connect(settings) as conn:
             preflight(conn, settings)

@@ -7,6 +7,12 @@ Incluye fallback a datos de demostración si se ejecuta en modo demo o sin conex
 
 from typing import Any, Dict, List, Optional
 from src.db import rows
+from src.governance import (
+    AuditLogger,
+    compute_canonical_sha256,
+    default_audit_logger,
+    stamp_fragments_collection,
+)
 
 def clean_name(s: Any) -> str:
     """Limpia espacios y caracteres mal codificados provenientes de SQL Server (ej: Ñuble)."""
@@ -387,8 +393,21 @@ def search_expedientes(
     solicitante: Optional[str] = None,
     limit: int = 50,
     conn=None,
+    audit_logger: Optional[AuditLogger] = None,
 ) -> List[Dict[str, Any]]:
-    """Busca solicitudes y expedientes en BD_EXP con conteo de oposiciones en vivo."""
+    """Busca solicitudes y expedientes en BD_EXP con conteo de oposiciones en vivo, SHA-256 por fragmento y auditoría JSONL."""
+    logger = audit_logger or default_audit_logger
+    query_meta = {
+        "tipo_tramite": tipo_tramite,
+        "reg_codigo": reg_codigo,
+        "pro_codigo": pro_codigo,
+        "com_codigo": com_codigo,
+        "exp_llave": exp_llave,
+        "solicitante": solicitante,
+        "limit": limit,
+    }
+    env_label = "SQL" if conn is not None else "DEMO"
+
     if conn is None:
         res = [dict(r) for r in DEMO_RESULTADOS_BUSQUEDA]
         if tipo_tramite and tipo_tramite > 0:
@@ -406,7 +425,17 @@ def search_expedientes(
         for r in res:
             r["FechaSolicitud"] = normalize_fecha(r.get("FechaSolicitud"))
             r["FechaInicio"] = r["FechaSolicitud"]
-        return res
+        stamped, _, _ = stamp_fragments_collection(res, field_name="sha256")
+        abstained = len(stamped) == 0
+        logger.log_query(
+            operation="search_expedientes",
+            query_params=query_meta,
+            fragments=stamped,
+            environment=env_label,
+            abstained=abstained,
+            abstention_reason="ABSTENCIÓN: Cero expedientes coinciden con los filtros consultados." if abstained else None,
+        )
+        return stamped
 
     conditions = ["1=1"]
     params: List[Any] = []
@@ -474,25 +503,69 @@ def search_expedientes(
             r["RutSolicitante"] = clean_rut(r.get("RutSolicitante"))
             r["FechaSolicitud"] = normalize_fecha(r.get("FechaSolicitud"))
             r["FechaInicio"] = r["FechaSolicitud"]
-        return records
+        stamped, _, _ = stamp_fragments_collection(records, field_name="sha256")
+        abstained = len(stamped) == 0
+        logger.log_query(
+            operation="search_expedientes",
+            query_params=query_meta,
+            fragments=stamped,
+            environment=env_label,
+            abstained=abstained,
+            abstention_reason="ABSTENCIÓN: Cero expedientes coinciden en BD_EXP." if abstained else None,
+        )
+        return stamped
     except Exception as exc:
+        logger.log_query(
+            operation="search_expedientes",
+            query_params=query_meta,
+            fragments=[],
+            environment=env_label,
+            abstained=True,
+            abstention_reason=f"Error SQL: {exc}",
+            status="ERROR",
+        )
         return [{"error": str(exc)}]
 
 
-def fetch_oposiciones_detalle(exp_llave: str, conn=None) -> List[Dict[str, Any]]:
-    """Ejecuta CPA_BusquedaOpExpedientes_SNIA para obtener la lista formal de oposiciones."""
+def fetch_oposiciones_detalle(
+    exp_llave: str,
+    conn=None,
+    audit_logger: Optional[AuditLogger] = None,
+) -> List[Dict[str, Any]]:
+    """Ejecuta CPA_BusquedaOpExpedientes_SNIA con hash SHA-256 por fragmento y auditoría JSONL."""
+    logger = audit_logger or default_audit_logger
+    env_label = "SQL" if conn is not None else "DEMO"
     if not exp_llave or not exp_llave.strip():
+        logger.log_query(
+            operation="fetch_oposiciones_detalle",
+            query_params={"exp_llave": exp_llave},
+            fragments=[],
+            environment=env_label,
+            abstained=True,
+            abstention_reason="ABSTENCIÓN: Código de expediente vacío.",
+        )
         return []
     clean_llave = exp_llave.strip().upper()
 
     if conn is None:
-        # Buscar en almacén de memoria demo
+        raw_res: List[Dict[str, Any]] = []
         if clean_llave in DEMO_OPOSICIONES_STORE:
-            return list(DEMO_OPOSICIONES_STORE[clean_llave])
-        for k, v in DEMO_OPOSICIONES_STORE.items():
-            if k in clean_llave or clean_llave in k:
-                return list(v)
-        return []
+            raw_res = list(DEMO_OPOSICIONES_STORE[clean_llave])
+        else:
+            for k, v in DEMO_OPOSICIONES_STORE.items():
+                if k in clean_llave or clean_llave in k:
+                    raw_res = list(v)
+                    break
+        stamped, _, _ = stamp_fragments_collection(raw_res, field_name="sha256")
+        logger.log_query(
+            operation="fetch_oposiciones_detalle",
+            query_params={"exp_llave": clean_llave},
+            fragments=stamped,
+            environment=env_label,
+            abstained=len(stamped) == 0,
+            abstention_reason="Sin oposiciones registradas para el expediente." if not stamped else None,
+        )
+        return stamped
 
     sql = """
     DECLARE @status INT, @statusDesc VARCHAR(200);
@@ -507,8 +580,26 @@ def fetch_oposiciones_detalle(exp_llave: str, conn=None) -> List[Dict[str, Any]]
         cols = [c[0] for c in cur.description] if cur.description else []
         res = [dict(zip(cols, row)) for row in cur.fetchall()]
         cur.close()
-        return res
+        stamped, _, _ = stamp_fragments_collection(res, field_name="sha256")
+        logger.log_query(
+            operation="fetch_oposiciones_detalle",
+            query_params={"exp_llave": clean_llave},
+            fragments=stamped,
+            environment=env_label,
+            abstained=len(stamped) == 0,
+            abstention_reason="Sin oposiciones registradas en SNIA para el expediente." if not stamped else None,
+        )
+        return stamped
     except Exception as exc:
+        logger.log_query(
+            operation="fetch_oposiciones_detalle",
+            query_params={"exp_llave": clean_llave},
+            fragments=[],
+            environment=env_label,
+            abstained=True,
+            abstention_reason=f"Error SQL: {exc}",
+            status="ERROR",
+        )
         return [{"error": str(exc)}]
 
 
@@ -520,22 +611,48 @@ def agregar_oposicion(
     opositor_rut: str,
     observaciones: str = "",
     conn=None,
+    audit_logger: Optional[AuditLogger] = None,
 ) -> Dict[str, Any]:
     """Registra una nueva oposición formal para el expediente en BD_EXP (o en sesión de memoria).
     
     Llama a BD_EXP.dbo.CPA_SaveIngresoOposicion_Portal y vincula la persona opositora
     mediante BD_EXP.dbo.CPA_SaveRelacionVinculadoPerPortal.
+    Registra auditoría estructurada JSONL y hash SHA-256 (ISO/IEC 42001).
     """
+    logger = audit_logger or default_audit_logger
+    env_label = "SQL" if conn is not None else "DEMO"
+    tx_params = {
+        "exp_codigo": exp_codigo,
+        "fecha_ingreso": fecha_ingreso,
+        "doc_nro": doc_nro,
+        "opositor_nombre": opositor_nombre,
+        "opositor_rut": opositor_rut,
+    }
+
+    def _reject(msg: str) -> Dict[str, Any]:
+        res = {"success": False, "message": msg}
+        res["sha256"] = compute_canonical_sha256(res)
+        logger.log_query(
+            operation="agregar_oposicion",
+            query_params=tx_params,
+            fragments=[res],
+            environment=env_label,
+            abstained=True,
+            abstention_reason=msg,
+            status="REJECTED",
+        )
+        return res
+
     if not exp_codigo or not exp_codigo.strip():
-        return {"success": False, "message": "El código de expediente es obligatorio."}
+        return _reject("El código de expediente es obligatorio.")
     if len(exp_codigo.strip()) > 15:
-        return {"success": False, "message": "El código de expediente excede el largo máximo (15 caracteres)."}
+        return _reject("El código de expediente excede el largo máximo (15 caracteres).")
     if not opositor_nombre or not opositor_nombre.strip():
-        return {"success": False, "message": "Debe especificar el nombre o razón social del opositor."}
+        return _reject("Debe especificar el nombre o razón social del opositor.")
     if doc_nro and len(doc_nro.strip()) > 20:
-        return {"success": False, "message": "El número de documento / SSD excede el largo máximo (20 caracteres)."}
+        return _reject("El número de documento / SSD excede el largo máximo (20 caracteres).")
     if not opositor_rut or not validate_rut(opositor_rut):
-        return {"success": False, "message": f"El RUT del opositor '{opositor_rut}' no es válido (verifique formato y dígito verificador Módulo 11)."}
+        return _reject(f"El RUT del opositor '{opositor_rut}' no es válido (verifique formato y dígito verificador Módulo 11).")
 
     # Validar formato de fecha
     import datetime
@@ -549,7 +666,7 @@ def agregar_oposicion(
         else:
             raise ValueError()
     except Exception:
-        return {"success": False, "message": f"La fecha de ingreso '{fecha_ingreso}' no tiene un formato válido (DD/MM/YYYY)."}
+        return _reject(f"La fecha de ingreso '{fecha_ingreso}' no tiene un formato válido (DD/MM/YYYY).")
 
     clean_exp = exp_codigo.strip().upper()
     clean_rut_opo = clean_rut(opositor_rut)
@@ -597,26 +714,40 @@ def agregar_oposicion(
             if row:
                 st_code, st_desc, id_inst, num_opo = row[0], row[1], row[2], row[3]
                 if st_code == 0 or (id_inst and id_inst > 0):
-                    return {
+                    out = {
                         "success": True,
                         "message": f"Oposición registrada exitosamente en BD_EXP. Instancia N° {id_inst}, N° Oposición: {num_opo}",
                         "id_instancia": id_inst,
                         "numero_oposicion": num_opo,
                         "expediente": clean_exp,
                     }
+                    out["sha256"] = compute_canonical_sha256(out)
+                    logger.log_query(
+                        operation="agregar_oposicion",
+                        query_params=tx_params,
+                        fragments=[out],
+                        environment=env_label,
+                        abstained=False,
+                    )
+                    return out
                 else:
-                    return {
-                        "success": False,
-                        "message": f"Error retornado por CPA_SaveIngresoOposicion_Portal: {st_desc} (código {st_code})",
-                        "expediente": clean_exp,
-                    }
-            return {
+                    return _reject(f"Error retornado por CPA_SaveIngresoOposicion_Portal: {st_desc} (código {st_code})")
+            out = {
                 "success": True,
                 "message": "Oposición registrada en BD_EXP.",
                 "expediente": clean_exp,
             }
+            out["sha256"] = compute_canonical_sha256(out)
+            logger.log_query(
+                operation="agregar_oposicion",
+                query_params=tx_params,
+                fragments=[out],
+                environment=env_label,
+                abstained=False,
+            )
+            return out
         except Exception as exc:
-            return {"success": False, "message": f"Error SQL al registrar oposición: {str(exc)}", "expediente": clean_exp}
+            return _reject(f"Error SQL al registrar oposición: {str(exc)}")
 
     # Modo Demostración / Memoria Local
     import random
@@ -637,6 +768,7 @@ def agregar_oposicion(
         "IdOposicion": new_id,
         "Observaciones": observaciones.strip() if observaciones else "Ingreso manual desde Portal DGA Gob.cl",
     }
+    new_entry["sha256"] = compute_canonical_sha256(new_entry)
     existing_list.append(new_entry)
 
     for item in DEMO_RESULTADOS_BUSQUEDA:
@@ -646,11 +778,21 @@ def agregar_oposicion(
             item["Estado"] = "CON OPOSICIÓN"
             break
 
-    return {
+    out = {
         "success": True,
         "message": f"Oposición registrada exitosamente en BD_EXP (Modo Simulación). Instancia N° {new_id}, N° Oposición: {new_correlativo}",
         "id_instancia": new_id,
         "numero_oposicion": new_correlativo,
         "expediente": clean_exp,
     }
+    out["sha256"] = compute_canonical_sha256(out)
+    logger.log_query(
+        operation="agregar_oposicion",
+        query_params=tx_params,
+        fragments=[new_entry, out],
+        environment=env_label,
+        abstained=False,
+    )
+    return out
+
 

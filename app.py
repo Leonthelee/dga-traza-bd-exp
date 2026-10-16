@@ -13,6 +13,14 @@ from src.config import ROOT, load_settings
 from src.db import connect
 from src.demo import demo_events
 from src.export import csv_bytes, excel_bytes, markdown_rag_summary
+from src.governance import (
+    SYSTEM_ABSTENTION_GUARDRAIL,
+    build_repository_integrity_manifest,
+    compute_canonical_sha256,
+    compute_file_sha256,
+    default_audit_logger,
+    default_hallucination_guard,
+)
 from src.inspector import parse_expediente, SECUENCIA_SEARCH_SOLICITUDES
 from src.oposiciones import (
     agregar_oposicion,
@@ -35,10 +43,9 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
-    
+    /* Zero-CDN: Pila tipográfica institucional local Gob.cl */
     html, body, [class*="css"] {
-        font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family: 'Roboto', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
     /* Franja Bicolor Oficial Gob.cl */
@@ -121,7 +128,7 @@ st.markdown("""
         <div class="header-title">Dirección General de Aguas — Módulo de Oposiciones</div>
     </div>
     <div class="badge-mop">
-        🏛️ Sistema Oficial • Kit Digital Gob.cl
+        🏛️ Sistema Oficial • Kit Digital Gob.cl • ISO/IEC 42001 & 23894
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -159,6 +166,7 @@ section = st.sidebar.radio(
     "Módulo / Vista",
     [
         "Módulo Oposiciones (Gob.cl)",
+        "Gobernanza IA (ISO 42001 / 23894)",
         "Secuencia y árbol",
         "Inspector searchSolicitudes",
         "Patrones",
@@ -398,7 +406,11 @@ if section == "Módulo Oposiciones (Gob.cl)":
     if results and "error" in results[0]:
         st.error(f"Error al consultar base de datos: {results[0]['error']}")
     elif not results:
-        st.info("No se encontraron solicitudes con los criterios indicados.")
+        st.warning(
+            "🛡️ **ABSTENCIÓN FORZADA [ISO/IEC 23894 & ISO/IEC 42001]:** "
+            "No existen registros verificados en `BD_EXP` para los criterios consultados. "
+            "Se bloquea cualquier extrapolación y el evento ha quedado registrado en `data/audit_iso42001.jsonl`."
+        )
     else:
         con_opo = sum(1 for r in results if (r.get("NumOposicionesRaw", 0) > 0) or (" - Sí" in str(r.get("NumOposiciones", ""))))
         c_m1, c_m2, c_m3 = st.columns(3)
@@ -411,6 +423,9 @@ if section == "Módulo Oposiciones (Gob.cl)":
             df_res["RutSolicitante"] = [clean_rut(r.get("RutPasSolicitante", "")) for r in results]
         if "FechaSolicitud" not in df_res.columns:
             df_res["FechaSolicitud"] = df_res.get("FechaInicio", "S/I")
+        if "sha256" not in df_res.columns:
+            df_res["sha256"] = [compute_canonical_sha256(r) for r in results]
+        df_res["SHA256_Corto"] = df_res["sha256"].astype(str).str.slice(0, 12) + "..."
 
         cols_show = [
             "ExpConcatLlave",
@@ -423,6 +438,7 @@ if section == "Módulo Oposiciones (Gob.cl)":
             "GLComuna",
             "GLTipoDerecho",
             "Estado",
+            "SHA256_Corto",
         ]
         cols_present = [c for c in cols_show if c in df_res.columns]
         rename_map = {
@@ -436,6 +452,7 @@ if section == "Módulo Oposiciones (Gob.cl)":
             "GLComuna": "Comuna",
             "GLTipoDerecho": "Tipo Derecho",
             "Estado": "Estado",
+            "SHA256_Corto": "SHA-256 (ISO 42001)",
         }
         df_display = df_res[cols_present].rename(columns=rename_map)
         df_display["Agregar Oposicion"] = "Agregar Oposicion"
@@ -549,6 +566,7 @@ if section == "Módulo Oposiciones (Gob.cl)":
                 c_d2.metric("RUT Solicitante", exp_row.get("RutSolicitante", "S/I"))
                 c_d3.metric("Fecha Solicitud", exp_row.get("FechaSolicitud", exp_row.get("FechaInicio", "S/I")))
                 c_d4.metric("N° Oposiciones", str(exp_row.get("NumOposiciones", "0 - No")))
+                st.caption(f"🔐 **Hash Criptográfico SHA-256 del Registro (ISO/IEC 42001):** `{exp_row.get('sha256', compute_canonical_sha256(exp_row))}`")
 
             t_op1, t_op2, t_op3 = st.tabs(["📑 Oposiciones Formales (SNIA)", "🗄️ Lugares de Almacenamiento (BD_EXP)", "💾 Exportar Datos"])
             with t_op1:
@@ -592,6 +610,135 @@ if section == "Módulo Oposiciones (Gob.cl)":
                         key="btn_dl_opo_xlsx"
                     )
 
+elif section == "Gobernanza IA (ISO 42001 / 23894)":
+    st.subheader("🛡️ Sistema de Gestión de IA (ISO/IEC 42001) & Control de Riesgos (ISO/IEC 23894)")
+    st.caption(
+        "Panel de auditoría forense en producción: Log estructurado JSONL con cadena inmutable SHA-256, "
+        "verificación criptográfica de archivos/fragmentos y mitigación de alucinaciones mediante distancia vectorial y abstención forzada."
+    )
+
+    tab_gov1, tab_gov2, tab_gov3 = st.tabs([
+        "🧠 Mitigación de Alucinaciones & Abstención (ISO 23894)",
+        "📜 Log Estructurado de Auditoría JSONL (ISO 42001)",
+        "🔐 Inventario Criptográfico SHA-256",
+    ])
+
+    with tab_gov1:
+        st.markdown("##### 🎯 Consultor Técnico RAG con Distancia Vectorial y Cláusula de Abstención Forzada")
+        st.info(f"**Directriz Activa:** {SYSTEM_ABSTENTION_GUARDRAIL}")
+
+        col_q1, col_q2, col_q3 = st.columns([3, 1, 1])
+        with col_q1:
+            rag_query = st.text_input(
+                "Consulta Técnica sobre BD_EXP / Oposiciones / Procedimientos Almacenados",
+                value="¿Qué procedimientos almacenados y tablas intervienen en searchSolicitudes y fechas legales?",
+                key="gov_rag_query",
+            )
+        with col_q2:
+            max_dist = st.slider(
+                "Umbral Máx. Distancia Coseno",
+                min_value=0.15,
+                max_value=0.90,
+                value=0.72,
+                step=0.01,
+                key="gov_max_dist",
+            )
+        with col_q3:
+            top_k_val = st.number_input("Top-K Fragmentos", min_value=1, max_value=10, value=3, key="gov_top_k")
+
+        eval_res = default_hallucination_guard.retrieve_and_evaluate(
+            query=rag_query,
+            top_k=int(top_k_val),
+            max_cosine_distance=float(max_dist),
+            environment=target_env if is_db_mode else "DEMO",
+            log_audit=True,
+        )
+
+        m_g1, m_g2, m_g3, m_g4 = st.columns(4)
+        m_g1.metric("Distancia Vectorial Mínima", f"{eval_res['min_cosine_distance']:.4f}")
+        m_g2.metric("Similitud Coseno Máxima", f"{eval_res['max_cosine_similarity']:.4f}")
+        m_g3.metric("Umbral Máximo Permitido", f"{eval_res['threshold_max_distance']:.4f}")
+        m_g4.metric("Estado Guardrail", "ABSTENCIÓN FORZADA" if eval_res["abstained"] else "EVIDENCIA VERIFICADA")
+
+        if eval_res["abstained"]:
+            st.error(eval_res["abstention_clause"])
+        else:
+            st.success(
+                f"Consulta dentro del umbral de seguridad vectorial (`d = {eval_res['min_cosine_distance']:.4f} <= {eval_res['threshold_max_distance']:.4f}`). "
+                f"Hash SHA-256 de la consulta: `{eval_res['query_sha256']}`"
+            )
+
+        st.markdown("###### 📊 Fragmentos Recuperados, Distancias Vectoriales y Hashes SHA-256")
+        frag_rows = [
+            {
+                "ID Fragmento": f["chunk_id"],
+                "Archivo Fuente": f["source_file"],
+                "Título": f["title"],
+                "Distancia Coseno": f["cosine_distance"],
+                "Similitud Coseno": f["cosine_similarity"],
+                "Distancia L2": f["euclidean_distance"],
+                "Cumple Umbral": "SÍ" if f["within_threshold"] else "NO (ABSTENER)",
+                "SHA-256 Fragmento": f["fragment_sha256"],
+                "SHA-256 Archivo": f["file_sha256"],
+            }
+            for f in eval_res["retrieved_fragments"]
+        ]
+        st.dataframe(pd.DataFrame(frag_rows), width="stretch", hide_index=True)
+
+        with st.expander("Ver Respuesta Estructurada con Cláusula de Abstención / Evidencia"):
+            st.markdown(eval_res["answer"])
+
+    with tab_gov2:
+        st.markdown("##### 📜 Registro Estructurado de Auditoría en Formato JSONL (`data/audit_iso42001.jsonl`)")
+        chain_status = default_audit_logger.verify_chain()
+        c_ch1, c_ch2, c_ch3 = st.columns(3)
+        c_ch1.metric("Entradas Auditadas (JSONL)", str(chain_status.get("total_entries", 0)))
+        c_ch2.metric("Integridad Cadena SHA-256", "ÍNTEGRA" if chain_status.get("valid") else "ADULTERADA")
+        c_ch3.metric("SHA-256 Archivo Log", (chain_status.get("file_sha256") or "N/A")[:16] + "...")
+
+        if chain_status.get("valid"):
+            st.success(f"🔐 {chain_status.get('message')} Archivo: `{default_audit_logger.log_path}`")
+        else:
+            st.error(f"🚨 {chain_status.get('message')}")
+
+        entries = default_audit_logger.read_entries(limit=100)
+        if entries:
+            audit_table = [
+                {
+                    "Timestamp UTC": e.get("timestamp"),
+                    "Operación": e.get("operation"),
+                    "Ambiente": e.get("environment"),
+                    "Estado": e.get("status"),
+                    "Abstención": "SÍ" if e.get("abstained") else "NO",
+                    "N° Fragmentos": e.get("result_count"),
+                    "Dist. Vectorial Mín.": (e.get("vector_metrics") or {}).get("min_cosine_distance"),
+                    "SHA-256 Consulta": str(e.get("query_sha256", ""))[:16] + "...",
+                    "SHA-256 Fragmentos": str(e.get("combined_fragments_sha256", ""))[:16] + "...",
+                    "SHA-256 Entrada": str(e.get("entry_sha256", ""))[:16] + "...",
+                }
+                for e in entries
+            ]
+            st.dataframe(pd.DataFrame(audit_table), width="stretch", hide_index=True)
+
+            if default_audit_logger.log_path.exists():
+                raw_jsonl_bytes = default_audit_logger.log_path.read_bytes()
+                st.download_button(
+                    "⬇️ Descargar Log de Auditoría Estructurado (audit_iso42001.jsonl)",
+                    raw_jsonl_bytes,
+                    "audit_iso42001.jsonl",
+                    mime="application/x-ndjson",
+                    key="btn_dl_audit_jsonl",
+                )
+            with st.expander("Inspeccionar última línea JSONL cruda"):
+                st.json(entries[0])
+        else:
+            st.info("Aún no se registran eventos en el archivo JSONL.")
+
+    with tab_gov3:
+        st.markdown("##### 🔐 Manifiesto Criptográfico SHA-256 de Archivos y Base de Conocimiento")
+        manifest_df = pd.DataFrame(build_repository_integrity_manifest())
+        st.dataframe(manifest_df, width="stretch", hide_index=True)
+
 elif section == "Secuencia y árbol":
     for layer in LAYERS:
         with st.expander(layer):
@@ -618,7 +765,15 @@ elif section == "Inspector searchSolicitudes":
 
     exp_data = parse_expediente(exp_input)
     if exp_data:
-        st.success(f"**Expediente Identificado:** `{exp_data['codigo_completo']}` — {exp_data['tipo_nombre']}")
+        exp_hash = compute_canonical_sha256(exp_data)
+        default_audit_logger.log_query(
+            operation="inspect_expediente",
+            query_params={"exp_input": exp_input},
+            fragments=[exp_data, *SECUENCIA_SEARCH_SOLICITUDES],
+            environment=target_env if is_db_mode else "DEMO",
+            abstained=False,
+        )
+        st.success(f"**Expediente Identificado:** `{exp_data['codigo_completo']}` — {exp_data['tipo_nombre']} (SHA-256: `{exp_hash[:16]}...`)")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Tipo Código (@TexCodigo)", str(exp_data["tex_codigo"]))
         c2.metric("Región (@RegCodigo)", str(exp_data["reg_codigo"]))
@@ -644,7 +799,18 @@ SP2 --> T8[("BD_EXP..Expt_FechasExpediente")]''',
                 language="mermaid"
             )
     else:
-        st.warning("Formato no reconocido. Ingrese el código con formato PREFIJO-REGIONPROVINCIA-NUMERO (ej: ND-1204-390).")
+        default_audit_logger.log_query(
+            operation="inspect_expediente",
+            query_params={"exp_input": exp_input},
+            fragments=[],
+            environment=target_env if is_db_mode else "DEMO",
+            abstained=True,
+            abstention_reason="ABSTENCIÓN FORZADA: Código de expediente con formato inválido o no reconocido.",
+        )
+        st.warning(
+            "🛡️ Formato no reconocido (ABSTENCIÓN ISO/IEC 23894). "
+            "Ingrese el código con formato PREFIJO-REGIONPROVINCIA-NUMERO (ej: ND-1204-390)."
+        )
 
 elif section == "Patrones":
     st.dataframe(patterns(events))
@@ -686,7 +852,15 @@ elif section == "Evidencia":
                 try:
                     bpm_knowledge.parent.mkdir(parents=True, exist_ok=True)
                     bpm_knowledge.write_text(markdown_rag_summary(events), encoding="utf-8")
-                    st.success(f"Reglas y mapa de SPs inyectados correctamente en: {bpm_knowledge.name}")
+                    synced_sha256 = compute_file_sha256(bpm_knowledge)
+                    default_audit_logger.log_query(
+                        operation="sync_rag_knowledge_file",
+                        query_params={"target_file": str(bpm_knowledge)},
+                        fragments=[{"file": str(bpm_knowledge), "sha256": synced_sha256}],
+                        environment=target_env if is_db_mode else "DEMO",
+                        abstained=False,
+                    )
+                    st.success(f"Reglas y mapa de SPs inyectados correctamente en: {bpm_knowledge.name} (SHA-256: {synced_sha256[:16]}...)")
                 except Exception as ex:
                     st.error(f"Error al sincronizar: {ex}")
 
@@ -733,8 +907,9 @@ st.markdown("""
         <span>Gobierno de Chile • Ministerio de Obras Públicas • Dirección General de Aguas</span>
     </div>
     <div class="dga-signature">
-        DGA Core Tools — by Daniel Díaz L. & AI Engine Antigravity
+        DGA Core Tools — by Daniel Díaz L. & AI Engine Antigravity • ISO/IEC 42001 & 23894
     </div>
 </footer>
 """, unsafe_allow_html=True)
+
 

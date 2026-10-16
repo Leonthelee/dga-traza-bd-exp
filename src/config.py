@@ -50,19 +50,15 @@ def load_settings(path=None, env=None):
         data = tomllib.load(f)
 
     if env == "PROD" and "sql_prod" in data:
-        values = data["sql_prod"]
+        values = dict(data["sql_prod"])
     elif env == "QA" and "sql_qa" in data:
-        values = data["sql_qa"]
+        values = dict(data["sql_qa"])
     elif "sql" in data:
-        values = data["sql"]
-    elif "sql_prod" in data and env == "PROD":
-        values = data["sql_prod"]
-    elif "sql_qa" in data and env == "QA":
-        values = data["sql_qa"]
+        values = dict(data["sql"])
     elif "sql_prod" in data:
-        values = data["sql_prod"]
+        values = dict(data["sql_prod"])
     elif "sql_qa" in data:
-        values = data["sql_qa"]
+        values = dict(data["sql_qa"])
     else:
         raise ValueError("Configure la sección [sql], [sql_prod] o [sql_qa] en .streamlit/secrets.toml.")
 
