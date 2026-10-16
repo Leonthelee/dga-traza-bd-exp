@@ -1,0 +1,26 @@
+[project]
+name = "dga-traza-bd-exp"
+version = "2.0.0"
+description = "DGA Core Tools — Profiler XE, Módulo de Oposiciones Gob.cl & Gobernanza IA (ISO/IEC 42001 & ISO/IEC 23894)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Daniel Díaz L. (Leonthelee)", email = "46663305+Leonthelee@users.noreply.github.com" }
+]
+dependencies = [
+    "streamlit",
+    "pyodbc",
+    "pandas",
+    "openpyxl",
+    "defusedxml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-v"

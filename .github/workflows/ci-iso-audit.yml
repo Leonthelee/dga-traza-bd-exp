@@ -1,0 +1,53 @@
+name: DGA TrazaBD_EXP — CI & Auditoría ISO/IEC 42001 & 23894
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  iso-governance-and-tests:
+    name: Pytest + Verificación Criptográfica SHA-256 & Abstención ISO
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install system ODBC headers & Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unixodbc-dev
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Execute full Pytest suite (Core + Oposiciones + Worker + UI + ISO 42001/23894)
+        env:
+          PYTHONPATH: "."
+        run: |
+          pytest -v
+
+      - name: Verify Repository Cryptographic SHA-256 Manifest (ISO/IEC 42001 A.7.4)
+        env:
+          PYTHONPATH: "."
+        run: |
+          python qa_cli.py manifest
+
+      - name: Verify Hallucination Guard & Vector Distance Threshold (ISO/IEC 23894 6.4.3)
+        env:
+          PYTHONPATH: "."
+        run: |
+          python qa_cli.py rag-query "CPA_BusquedaExpedientesOp y Exps_DatFechasExpSel en BD_EXP"
+
+      - name: Verify JSONL Audit Log Hash Chain Integrity (ISO/IEC 42001 A.6.2.8)
+        env:
+          PYTHONPATH: "."
+        run: |
+          python qa_cli.py audit-verify

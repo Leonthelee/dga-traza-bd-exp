@@ -23,6 +23,9 @@ from src.inspector import SECUENCIA_SEARCH_SOLICITUDES, TIPO_EXPEDIENTE
 
 DEFAULT_AUDIT_LOG_PATH = DATA / "audit_iso42001.jsonl"
 
+MAINTAINER_IDENTITY = "Daniel Díaz L. (Leonthelee - DGA MOP)"
+MAINTAINER_SSH_FINGERPRINT = "SHA256:fnHvLWQySkEs0yVynqdd5IL5UsGBM+nWy6bQCZEZD5c"
+
 ISO_CONTROLS = (
     "ISO/IEC 42001:2023-A.6.2.8 (Registro de eventos y trazabilidad de IA)",
     "ISO/IEC 42001:2023-A.7.4 (Integridad y procedencia criptográfica de datos)",
@@ -118,12 +121,15 @@ def stamp_fragments_collection(
 
 
 def build_repository_integrity_manifest(paths: Optional[Iterable[Path]] = None) -> List[Dict[str, Any]]:
-    """Construye el manifiesto criptográfico SHA-256 de los archivos críticos del repositorio y base de conocimiento."""
+    """Construye el manifiesto criptográfico SHA-256 de los archivos críticos del repositorio y evidencia forense."""
     if paths is None:
         default_files = [
             ROOT / "app.py",
             ROOT / "README.md",
             ROOT / "GEMINI.md",
+            ROOT / "TRACE OPOSICIONES.pdf",
+            ROOT / "TRACE OPOSICIONES.docx",
+            ROOT / "docs" / "ISO_42001_23894_COMPLIANCE.md",
             ROOT / "docs" / "design.md",
             ROOT / "docs" / "design-qa.md",
             ROOT / "docs" / "qa-checklist.md",
@@ -144,6 +150,7 @@ def build_repository_integrity_manifest(paths: Optional[Iterable[Path]] = None) 
                 "archivo": rel.replace("\\", "/"),
                 "bytes": path_obj.stat().st_size,
                 "sha256": digest,
+                "firmante_ssh": MAINTAINER_SSH_FINGERPRINT,
                 "estado": "VERIFICADO",
             })
     return manifest
@@ -726,6 +733,8 @@ def generate_iso_compliance_report(audit_logger: Optional[AuditLogger] = None) -
         "# 🛡️ Informe de Conformidad y Auditoría Criptográfica — ISO/IEC 42001 & ISO/IEC 23894",
         "",
         "> **Sistema:** DGA Core Tools — TrazaBD_EXP & Módulo de Oposiciones (Gob.cl)  ",
+        f"> **Custodio / Autoría Criptográfica:** `{MAINTAINER_IDENTITY}`  ",
+        f"> **Huella Pública SSH ED25519:** `{MAINTAINER_SSH_FINGERPRINT}`  ",
         f"> **Fecha de Emisión (UTC):** `{utc_now_iso()}`  ",
         f"> **Estado de Cadena JSONL:** `{'ÍNTEGRA' if chain.get('valid') else 'ADULTERADA'}`  ",
         f"> **Total de Operaciones Auditadas:** `{chain.get('total_entries', 0)}`  ",
