@@ -176,3 +176,48 @@ def test_markdown_rag_summary_includes_iso_clauses_and_sha256(tmp_path):
     assert len(entries) == 1
     assert entries[0]["operation"] == "export_markdown_rag_summary"
     assert len(entries[0]["metadata"]["document_sha256"]) == 64
+
+
+def test_sql_safety_and_payload_sanitization_and_cli(tmp_path, capsys):
+    from src.governance import (
+        generate_iso_compliance_report,
+        sanitize_audit_payload,
+        validate_sql_safety,
+    )
+    import qa_cli
+
+    # 1. Sanitización de credenciales en logs de auditoría JSONL
+    logger = AuditLogger(log_path=tmp_path / "sanitized_audit.jsonl")
+    entry = logger.log_query(
+        operation="connect_db",
+        query_params={"server": "172.16.71.41", "username": "cpa_admin", "password": "SuperSecretPassword123!"},
+        metadata={"api_Token": "tok_999"},
+    )
+    assert entry["query_params"]["password"] == "[REDACTED_ISO42001]"
+    assert entry["metadata"]["api_Token"] == "[REDACTED_ISO42001]"
+    raw_content = (tmp_path / "sanitized_audit.jsonl").read_text(encoding="utf-8")
+    assert "SuperSecretPassword123!" not in raw_content
+    assert "tok_999" not in raw_content
+
+    # 2. Validación de Guardrail SQL (ISO/IEC 23894)
+    assert validate_sql_safety("SELECT TOP 10 * FROM BD_EXP.dbo.SolicitudEnTramite")["is_safe"] is True
+    assert validate_sql_safety("DROP TABLE BD_EXP.dbo.Expt_Solicitud")["is_safe"] is False
+    assert validate_sql_safety("DELETE FROM BD_EXP.dbo.Expt_Personas")["is_safe"] is False
+    assert validate_sql_safety("TRUNCATE TABLE BD_PAR.dbo.Part_Region")["is_safe"] is False
+    assert validate_sql_safety("UPDATE BD_EXP.dbo.Expt_Solicitud SET Estado = 1")["is_safe"] is False
+
+    # 3. Generación de informe de conformidad ISO/IEC 42001 & 23894
+    report = generate_iso_compliance_report(audit_logger=logger)
+    assert "Informe de Conformidad y Auditoría Criptográfica" in report
+    assert "ÍNTEGRA" in report
+    assert "connect_db" in report
+
+    # 4. Comandos de auditoría en qa_cli.py
+    qa_cli.main(["manifest"])
+    out_manifest = capsys.readouterr().out
+    assert "src/governance.py" in out_manifest
+
+    qa_cli.main(["rag-query", "CPA_BusquedaExpedientesOp en BD_EXP"])
+    out_rag = capsys.readouterr().out
+    assert '"abstained": false' in out_rag
+

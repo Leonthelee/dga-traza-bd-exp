@@ -149,6 +149,67 @@ def build_repository_integrity_manifest(paths: Optional[Iterable[Path]] = None) 
     return manifest
 
 
+_SENSITIVE_KEYS = {"password", "pwd", "secret", "token", "api_key", "apikey", "clave"}
+
+
+def sanitize_audit_payload(obj: Any) -> Any:
+    """Enmascara credenciales o llaves sensibles antes de persistir en el log de auditoría JSONL (ISO/IEC 42001 A.8.4)."""
+    if isinstance(obj, dict):
+        cleaned = {}
+        for k, v in obj.items():
+            if str(k).lower() in _SENSITIVE_KEYS or any(s in str(k).lower() for s in ("password", "secret", "token")):
+                cleaned[k] = "[REDACTED_ISO42001]"
+            else:
+                cleaned[k] = sanitize_audit_payload(v)
+        return cleaned
+    if isinstance(obj, (list, tuple)):
+        return [sanitize_audit_payload(x) for x in obj]
+    return obj
+
+
+def validate_sql_safety(sql: str) -> Dict[str, Any]:
+    """Evalúa sentencias SQL contra reglas de aislamiento estricto y cero impacto en BD_EXP/BD_PAR/BD_MAP (ISO/IEC 23894)."""
+    clean_sql = (sql or "").strip()
+    if not clean_sql:
+        return {"is_safe": False, "level": "WARNING", "reason": "Sentencia SQL vacía.", "sql_sha256": compute_sha256_text("")}
+
+    sql_sha = compute_sha256_text(clean_sql)
+    # Eliminar comentarios para evitar bypass básico
+    no_comments = re.sub(r"--.*?$", "", clean_sql, flags=re.M)
+    no_comments = re.sub(r"/\*.*?\*/", "", no_comments, flags=re.S)
+
+    destructive_patterns = [
+        (r"\bDROP\s+(?:TABLE|DATABASE|PROCEDURE|VIEW|INDEX)\b", "Sentencia DROP destructiva bloqueada."),
+        (r"\bTRUNCATE\s+TABLE\b", "Sentencia TRUNCATE TABLE bloqueada."),
+        (r"\bDELETE\s+FROM\b", "Sentencia DELETE FROM bloqueada en bases de negocio DGA."),
+        (r"\bALTER\s+(?:TABLE|DATABASE|PROCEDURE|VIEW)\b", "Sentencia ALTER sobre objetos de negocio bloqueada."),
+        (r"\bINSERT\s+INTO\b", "Inserción directa bloqueada; utilice exclusivamente SPs canónicos autorizados."),
+    ]
+    for pattern, reason in destructive_patterns:
+        if re.search(pattern, no_comments, flags=re.I):
+            return {
+                "is_safe": False,
+                "level": "CRITICAL",
+                "reason": f"VIOLACIÓN DE GUARDRAIL [ISO/IEC 23894]: {reason}",
+                "sql_sha256": sql_sha,
+            }
+
+    if re.search(r"\bUPDATE\s+\w+", no_comments, flags=re.I):
+        return {
+            "is_safe": False,
+            "level": "CRITICAL",
+            "reason": "VIOLACIÓN DE GUARDRAIL [ISO/IEC 23894]: Sentencia UPDATE directa no permitida sobre BD_EXP/BD_PAR/BD_MAP.",
+            "sql_sha256": sql_sha,
+        }
+
+    return {
+        "is_safe": True,
+        "level": "OK",
+        "reason": "Sentencia SQL verificada bajo política de aislamiento y solo lectura / SP canónico.",
+        "sql_sha256": sql_sha,
+    }
+
+
 # ==============================================================================
 # CONTROL 1: LOG ESTRUCTURADO DE AUDITORÍA EN FORMATO JSONL (ISO/IEC 42001)
 # ==============================================================================
@@ -202,7 +263,9 @@ class AuditLogger:
             if fragment_hashes
             else compute_sha256_text("NO_FRAGMENTS")
         )
-        query_sha256 = compute_canonical_sha256(query_params)
+        safe_query_params = sanitize_audit_payload(query_params)
+        safe_metadata = sanitize_audit_payload(metadata or {})
+        query_sha256 = compute_canonical_sha256(safe_query_params)
         prev_hash = self._last_entry_hash()
 
         entry_core = {
@@ -212,7 +275,7 @@ class AuditLogger:
             "environment": environment,
             "operation": operation,
             "status": status,
-            "query_params": query_params,
+            "query_params": safe_query_params,
             "query_sha256": query_sha256,
             "result_count": fragment_count,
             "fragments_sha256": fragment_hashes,
@@ -224,7 +287,7 @@ class AuditLogger:
             },
             "abstained": bool(abstained),
             "abstention_reason": abstention_reason,
-            "metadata": metadata or {},
+            "metadata": safe_metadata,
             "prev_entry_sha256": prev_hash,
         }
         entry_sha256 = compute_canonical_sha256(entry_core)
@@ -650,3 +713,62 @@ class HallucinationGuard:
 
 
 default_hallucination_guard = HallucinationGuard()
+
+
+def generate_iso_compliance_report(audit_logger: Optional[AuditLogger] = None) -> str:
+    """Genera un informe ejecutivo en Markdown del estado de cumplimiento ISO/IEC 42001 e ISO/IEC 23894."""
+    logger = audit_logger or default_audit_logger
+    chain = logger.verify_chain()
+    manifest = build_repository_integrity_manifest()
+    entries = logger.read_entries(limit=25)
+
+    lines = [
+        "# 🛡️ Informe de Conformidad y Auditoría Criptográfica — ISO/IEC 42001 & ISO/IEC 23894",
+        "",
+        "> **Sistema:** DGA Core Tools — TrazaBD_EXP & Módulo de Oposiciones (Gob.cl)  ",
+        f"> **Fecha de Emisión (UTC):** `{utc_now_iso()}`  ",
+        f"> **Estado de Cadena JSONL:** `{'ÍNTEGRA' if chain.get('valid') else 'ADULTERADA'}`  ",
+        f"> **Total de Operaciones Auditadas:** `{chain.get('total_entries', 0)}`  ",
+        f"> **SHA-256 del Archivo de Auditoría:** `{chain.get('file_sha256') or 'N/A'}`",
+        "",
+        "## 1. Controles Normativos Activos",
+        "",
+    ]
+    for ctrl in ISO_CONTROLS:
+        lines.append(f"- **{ctrl}**")
+
+    lines.extend([
+        "",
+        "## 2. Directriz de Abstención Obligatoria (ISO/IEC 23894)",
+        "",
+        f"> {SYSTEM_ABSTENTION_GUARDRAIL}",
+        "",
+        "## 3. Manifiesto Criptográfico SHA-256 de Archivos Críticos",
+        "",
+        "| Archivo | Tamaño (Bytes) | Hash SHA-256 | Estado |",
+        "| :--- | :--- | :--- | :--- |",
+    ])
+    for item in manifest:
+        lines.append(f"| `{item['archivo']}` | {item['bytes']} | `{item['sha256']}` | {item['estado']} |")
+
+    lines.extend([
+        "",
+        "## 4. Últimas Operaciones Registradas en `audit_iso42001.jsonl`",
+        "",
+    ])
+    if entries:
+        lines.append("| Timestamp UTC | Operación | Ambiente | Fragmentos | Abstención | Dist. Vectorial Mín. | SHA-256 Entrada |")
+        lines.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
+        for e in entries:
+            dist = (e.get("vector_metrics") or {}).get("min_cosine_distance")
+            dist_str = f"{dist:.4f}" if isinstance(dist, (int, float)) else "N/A"
+            lines.append(
+                f"| `{e.get('timestamp')}` | `{e.get('operation')}` | `{e.get('environment')}` | "
+                f"{e.get('result_count')} | `{'SÍ' if e.get('abstained') else 'NO'}` | `{dist_str}` | `{str(e.get('entry_sha256', ''))[:16]}...` |"
+            )
+    else:
+        lines.append("- *(Sin registros previos en el archivo JSONL)*")
+
+    lines.append("")
+    return "\n".join(lines)
+

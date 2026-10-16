@@ -20,6 +20,8 @@ from src.governance import (
     compute_file_sha256,
     default_audit_logger,
     default_hallucination_guard,
+    generate_iso_compliance_report,
+    validate_sql_safety,
 )
 from src.inspector import parse_expediente, SECUENCIA_SEARCH_SOLICITUDES
 from src.oposiciones import (
@@ -738,6 +740,28 @@ elif section == "Gobernanza IA (ISO 42001 / 23894)":
         st.markdown("##### 🔐 Manifiesto Criptográfico SHA-256 de Archivos y Base de Conocimiento")
         manifest_df = pd.DataFrame(build_repository_integrity_manifest())
         st.dataframe(manifest_df, width="stretch", hide_index=True)
+
+        report_md = generate_iso_compliance_report(default_audit_logger)
+        st.download_button(
+            "📄 Descargar Informe Oficial de Conformidad ISO/IEC 42001 & 23894 (.md)",
+            report_md.encode("utf-8"),
+            "Informe_Conformidad_ISO_42001_23894.md",
+            mime="text/markdown",
+            key="btn_dl_iso_report",
+        )
+
+        st.markdown("---")
+        st.markdown("##### 🛡️ Verificador de Guardrail SQL de Cero Impacto (ISO/IEC 23894)")
+        sql_test_in = st.text_input(
+            "Validar sentencia SQL antes de ejecución en BD_EXP / BD_PAR / BD_MAP",
+            value="EXEC BD_EXP.dbo.CPA_BusquedaOpExpedientes_SNIA @CodigoExpediente = 'ND-0802-4437'",
+            key="gov_sql_check_in",
+        )
+        sql_eval = validate_sql_safety(sql_test_in)
+        if sql_eval["is_safe"]:
+            st.success(f"✅ {sql_eval['reason']} (SHA-256: `{sql_eval['sql_sha256'][:16]}...`)")
+        else:
+            st.error(f"🚨 {sql_eval['reason']} (SHA-256: `{sql_eval['sql_sha256'][:16]}...`)")
 
 elif section == "Secuencia y árbol":
     for layer in LAYERS:
