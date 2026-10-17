@@ -1,0 +1,53 @@
+# Pipeline CI/CD Oficial GitLab — DGA Módulo de Oposiciones
+# Dirección General de Aguas — Ministerio de Obras Públicas
+# GitLab Bluex: https://gitlab.bluex.dev/daniel.diaz/modulo_opocisiones_traza
+
+stages:
+  - lint
+  - test
+  - build
+
+variables:
+  PYTHON_IMAGE: "python:3.11-slim"
+  DOCKER_DRIVER: overlay2
+
+# Etapa 1: Linting y Análisis Estático
+lint:backend:
+  stage: lint
+  image: $PYTHON_IMAGE
+  before_script:
+    - pip install --upgrade pip
+    - pip install ruff
+  script:
+    - python -m ruff check backend/ src/ tests/
+  allow_failure: true
+
+# Etapa 2: Pruebas Unitarias y Auditoría ISO
+test:backend:
+  stage: test
+  image: $PYTHON_IMAGE
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends unixodbc unixodbc-dev
+    - pip install --upgrade pip
+    - pip install -r backend/requirements.txt
+    - pip install pytest
+  script:
+    - python -m pytest tests/ -v --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+    expire_in: 7 days
+
+# Etapa 3: Build de Contenedores (Docker-in-Docker)
+build:containers:
+  stage: build
+  image: docker:24-dind
+  services:
+    - docker:24-dind
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - docker build -f backend/Dockerfile -t dga-oposiciones-backend:$CI_COMMIT_SHORT_SHA .
+    - docker build -f frontend/Dockerfile -t dga-oposiciones-frontend:$CI_COMMIT_SHORT_SHA .
+    - echo "Imágenes de contenedor compiladas exitosamente para commit $CI_COMMIT_SHORT_SHA"

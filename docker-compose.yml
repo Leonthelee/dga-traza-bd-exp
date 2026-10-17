@@ -1,0 +1,39 @@
+# Docker Compose — DGA Módulo de Oposiciones (Arquitectura Desacoplada)
+# Dirección General de Aguas — Ministerio de Obras Públicas
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: dga-oposiciones-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - APP_ENV=PROD
+      - SQL_SERVER=172.16.71.41
+      - SQL_DATABASES=BD_EXP,BD_PAR
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - dga-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: dga-oposiciones-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - dga-network
+
+networks:
+  dga-network:
+    driver: bridge

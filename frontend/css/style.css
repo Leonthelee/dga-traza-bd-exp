@@ -1,0 +1,449 @@
+/**
+ * Estilos Oficiales Kit Digital Gob.cl 2026 — DGA Módulo de Oposiciones
+ * Autoría Oficial: DGA Core Tools — by Daniel Díaz L. & AI Engine Antigravity
+ * 100% Autónomo (Zero Dependencias Externas / Zero CDN)
+ */
+
+:root {
+    --gob-blue: #0039A6;
+    --gob-red: #EA3323;
+    --gob-dark-blue: #002F6C;
+    --gob-light-blue: #0F69B4;
+    --dga-cyan: #0072CE;
+    --dga-hover: #005EA6;
+    --slate-50: #F8FAFC;
+    --slate-100: #F1F5F9;
+    --slate-200: #E2E8F0;
+    --slate-300: #CBD5E1;
+    --slate-400: #94A3B8;
+    --slate-500: #64748B;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1E293B;
+    --slate-900: #0F172A;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-family: "Segoe UI", Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    background-color: var(--slate-100);
+    color: var(--slate-800);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+    background-color: var(--gob-dark-blue);
+    color: #FFFFFF;
+}
+
+/* Franja Bicolor Oficial */
+.bicolor-stripe {
+    width: 100%;
+    height: 4px;
+    display: flex;
+}
+.bicolor-stripe .blue { width: 50%; background-color: var(--gob-blue); }
+.bicolor-stripe .red { width: 50%; background-color: var(--gob-red); }
+
+/* Header Institucional */
+header {
+    background-color: #FFFFFF;
+    border-bottom: 1px solid var(--slate-200);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.brand-titles {
+    display: flex;
+    flex-direction: column;
+}
+
+.brand-sub {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gob-dark-blue);
+}
+
+.brand-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--slate-900);
+}
+
+.header-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.badge-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid var(--slate-200);
+    background-color: var(--slate-50);
+    color: var(--slate-700);
+}
+
+.dot-green {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #10B981;
+}
+
+/* Layout Principal */
+main {
+    max-width: 1200px;
+    width: 100%;
+    margin: 1.5rem auto;
+    padding: 0 1.5rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Tarjetas y Contenedores */
+.card {
+    background-color: #FFFFFF;
+    border-radius: 8px;
+    border: 1px solid var(--slate-200);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    padding: 1.25rem 1.5rem;
+}
+
+.card-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--slate-900);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-desc {
+    font-size: 0.85rem;
+    color: var(--slate-500);
+    margin-bottom: 1rem;
+}
+
+/* Métricas en Tarjetas */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.metric-card {
+    background-color: #FFFFFF;
+    border: 1px solid var(--slate-200);
+    border-radius: 8px;
+    padding: 1rem;
+    border-left: 4px solid var(--gob-blue);
+}
+
+.metric-card.accent-amber {
+    border-left-color: #D97706;
+}
+
+.metric-card.accent-emerald {
+    border-left-color: #059669;
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--slate-500);
+}
+
+.metric-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--slate-900);
+    margin-top: 0.25rem;
+}
+
+/* Formularios y Filtros */
+.filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.form-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--slate-800);
+    background-color: #FFFFFF;
+    border: 1px solid var(--slate-300);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus {
+    border-color: var(--gob-light-blue);
+    box-shadow: 0 0 0 3px rgba(15, 105, 180, 0.15);
+}
+
+.form-control:disabled {
+    background-color: var(--slate-100);
+    color: var(--slate-400);
+    cursor: not-allowed;
+}
+
+/* Botones Oficiales */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background-color: var(--gob-blue);
+    color: #FFFFFF;
+}
+
+.btn-primary:hover {
+    background-color: var(--gob-dark-blue);
+}
+
+.btn-secondary {
+    background-color: #FFFFFF;
+    border-color: var(--slate-300);
+    color: var(--slate-700);
+}
+
+.btn-secondary:hover {
+    background-color: var(--slate-50);
+}
+
+.btn-action-opo {
+    background-color: #0284C7;
+    color: #FFFFFF;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 4px;
+}
+
+.btn-action-opo:hover {
+    background-color: #0369A1;
+}
+
+/* Tabla de Resultados */
+.table-responsive {
+    overflow-x: auto;
+    border: 1px solid var(--slate-200);
+    border-radius: 6px;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.825rem;
+    text-align: left;
+}
+
+.data-table thead {
+    background-color: var(--slate-50);
+    border-bottom: 2px solid var(--slate-200);
+}
+
+.data-table th {
+    padding: 0.65rem 0.85rem;
+    font-weight: 700;
+    color: var(--slate-700);
+    white-space: nowrap;
+}
+
+.data-table td {
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid var(--slate-200);
+    color: var(--slate-800);
+    vertical-align: middle;
+}
+
+.data-table tbody tr:hover {
+    background-color: #F8FAFC;
+}
+
+/* Insignias de Estado */
+.badge-status {
+    padding: 0.2rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.badge-tramite { background-color: #FEF3C7; color: #92400E; }
+.badge-aprobado { background-color: #D1FAE5; color: #065F46; }
+.badge-oposicion-si { background-color: #FEE2E2; color: #991B1B; font-weight: 700; }
+.badge-oposicion-no { background-color: #F1F5F9; color: #475569; }
+
+/* Modal Diálogo */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(15, 23, 42, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.modal-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-card {
+    background-color: #FFFFFF;
+    width: 100%;
+    max-width: 580px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    transform: translateY(-20px);
+    transition: transform 0.2s ease;
+}
+
+.modal-backdrop.show .modal-card {
+    transform: translateY(0);
+}
+
+.modal-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--slate-200);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--slate-50);
+}
+
+.modal-header h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--slate-900);
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--slate-400);
+}
+
+.modal-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.modal-footer {
+    padding: 0.85rem 1.25rem;
+    border-top: 1px solid var(--slate-200);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    background-color: var(--slate-50);
+}
+
+/* Footer Institucional */
+footer {
+    background-color: #FFFFFF;
+    border-top: 1px solid var(--slate-200);
+    padding: 1.25rem 1.5rem;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--slate-500);
+}
+
+.toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #FFFFFF;
+    z-index: 2000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: none;
+}
+.toast.toast-success { background-color: #059669; }
+.toast.toast-error { background-color: #DC2626; }

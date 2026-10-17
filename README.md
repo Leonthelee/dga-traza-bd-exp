@@ -49,15 +49,36 @@ El repositorio viene preparado con las plantillas en `.streamlit/secrets.example
 
 ## 🚀 Arranque Rápido
 
+### Modo Desacoplado (Backend FastAPI + Frontend Kit Digital Gob.cl) ⭐
+Sigue la misma arquitectura limpia que el proyecto *Desbloqueo DGA MOP*:
+1. **Lanzar Backend API REST (FastAPI / Uvicorn en :8000):**
+   ```cmd
+   iniciar-backend.cmd
+   ```
+2. **Lanzar Frontend Kit Digital Gob.cl (Nginx / Web Server en :8080):**
+   ```cmd
+   iniciar-frontend.cmd
+   ```
+3. **Orquestación Multi-contenedor (Docker Compose):**
+   ```bash
+   docker-compose up --build
+   ```
+   - **Frontend:** `http://localhost:8080` (Kit Digital Gob.cl 2026 nativo, Zero CDN)
+   - **Backend API:** `http://localhost:8000/docs` (Swagger OpenAPI interactivo)
+
+---
+
+### Modo Streamlit Monolítico (Herramienta de Diagnóstico Forense y QA)
 1. **Configuración del entorno:**
    ```powershell
    .\Setup-QA.ps1
    ```
 2. **Credenciales:**
-   Copiar `.streamlit/secrets.example.toml` a `.streamlit/secrets.toml` e ingresar la clave/key correspondiente (QA o Producción).
-3. **Ejecutar UI Local (Streamlit):**
+   Copiar `.streamlit/secrets.example.toml` a `.streamlit/secrets.toml` e ingresar la clave correspondiente.
+3. **Ejecutar UI Local (Streamlit en :8501):**
    ```powershell
    .\Start-QA.ps1
+
    ```
    Abre en `http://localhost:8501`.
 4. **Ejecutar Suite de Pruebas:**
