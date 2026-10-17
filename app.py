@@ -135,6 +135,22 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Panel de Navegación Ecosistema DGA Core Tools
+st.sidebar.markdown("### 🏛️ Ecosistema DGA Core Tools")
+st.sidebar.markdown("""
+<div style="font-size: 11px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px;">
+    <a href="http://localhost:8088" target="_blank" style="text-decoration: none; padding: 7px 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; color: #1e40af; font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
+        <span>⚡ Cockpit Orquestador (8088)</span><span>↗</span>
+    </a>
+    <a href="http://localhost:5678/workflow/LtBv5dnAaGwdFX01" target="_blank" style="text-decoration: none; padding: 7px 10px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; color: #c2410c; font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
+        <span>⚡ n8n Flow Canvas (5678)</span><span>↗</span>
+    </a>
+    <a href="http://localhost:8501" target="_blank" style="text-decoration: none; padding: 7px 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; color: #15803d; font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
+        <span>⚖️ Gestión Expedientes (8501)</span><span>↗</span>
+    </a>
+</div>
+""", unsafe_allow_html=True)
+
 # Panel de Telemetría y Configuración (Colapsado por defecto para mantener limpio el front institucional)
 st.sidebar.markdown("### ⚙️ Telemetría & Entorno DGA")
 mode = st.sidebar.radio(
